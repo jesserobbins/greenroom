@@ -14,7 +14,7 @@
         "name": "Jesse Robbins",
         "email": "jesse.robbins@openaid.org"
       },
-      "license": "MIT",
+      "license": "Apache-2.0",
       "homepage": "https://github.com/jesserobbins/greenroom",
       "keywords": [
         "claude-code",

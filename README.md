@@ -2,11 +2,11 @@
 
 > greenroom is a skill that sets up and maintains a private space for working on docs, plans, and files until you decide what you want to share publicly.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ## Why greenroom?
 
-Writing your plans, design docs, and half-formed thinking down generates rich context for both you and your agents. Checking that thinking into a *public* repo feels vulnerable and intimate, so most people don't. It ends up scattered across Notes apps, Slack DMs, and untracked scratch files, where it can't be versioned, searched, or handed to an agent.
+Writing your plans, design docs, and thinking down generates rich context for both you and your agents. Checking that thinking into a *public* repo feels vulnerable and intimate, so most people don't. It ends up scattered across Notes apps, Slack DMs, and untracked scratch files, where it can't be versioned, searched, or handed to an agent.
 
 greenroom keeps that work under git, in a **private** repo that sits right beside the public one. Two sibling repos under a single project folder: the polished code on one side (the stage), the raw thinking on the other (the green room). You do high-quality work in private, and the only thing that reaches the stage is the finished result.
 
@@ -139,4 +139,4 @@ greenroom was built using greenroom: this repo is the stage, and the drafts, des
 
 ## License
 
-[MIT](LICENSE) © Jesse Robbins
+[Apache 2.0](LICENSE) © Jesse Robbins

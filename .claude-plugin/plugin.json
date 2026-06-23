@@ -1,6 +1,6 @@
 {
   "name": "greenroom",
-  "description": "Keep your private design docs, drafts, and review notes in a private repo right beside the public code — so you do high-quality work in the open without leaking your raw thinking. The public repo is the stage; the private repo is the green room.",
+  "description": "Keep your private design docs, drafts, and review notes in a private repo right beside the public code \u2014 so you do high-quality work in the open without leaking your raw thinking. The public repo is the stage; the private repo is the green room.",
   "version": "0.1.0",
   "author": {
     "name": "Jesse Robbins",
@@ -8,7 +8,7 @@
   },
   "homepage": "https://github.com/jesserobbins/greenroom",
   "repository": "https://github.com/jesserobbins/greenroom",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "claude-code",
     "skill",
