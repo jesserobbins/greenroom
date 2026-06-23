@@ -12,16 +12,18 @@ A per-project layout: a parent folder per project holding two sibling git repos.
 ```
 ~/src/<project>/                     # parent folder, NOT a git repo
 ├── AGENTS.md                        # wrapper orientation: read by any agent at launch
+├── CLAUDE.md                        # Claude adapter: exactly "@AGENTS.md"
 ├── README.md                        # repo map for humans and agents (auto-managed by sync)
 ├── <project>.code-workspace         # canonical editor entry point
+├── .gemini/settings.json            # Gemini adapter: sets context.fileName to AGENTS.md (git-excluded)
 ├── <project>-public/                # public code repo (the thing on GitHub: the stage)
-│   ├── AGENTS.md                    # per-repo orientation (nested / nearest-file semantic)
-│   ├── CLAUDE.md                    # Claude adapter: exactly "@AGENTS.md" (git-excluded)
-│   ├── .claude/settings.local.json  # Claude safety-net grant for sibling repos (git-excluded)
-│   └── .gemini/settings.json        # Gemini adapter: points contextFileName at AGENTS.md (git-excluded)
+│   ├── AGENTS.md                    # your own, if any: greenroom does not create this
+│   ├── CLAUDE.md                    # Claude adapter: "@AGENTS.md", only if this repo has its own AGENTS.md
+│   └── .claude/settings.local.json  # Claude safety-net grant for sibling repos (git-excluded)
 ├── <project>-private/               # private notes repo (separate private GitHub repo: the green room)
 │   ├── AGENTS.md                    # per-repo private orientation
 │   ├── CLAUDE.md                    # Claude adapter: exactly "@AGENTS.md"
+│   ├── .claude/settings.local.json  # Claude safety-net grant for sibling repos (git-excluded)
 │   ├── README.md
 │   ├── docs/      # design docs, RFCs, ADR drafts
 │   ├── notes/     # dated working notes
@@ -72,7 +74,7 @@ Use this when the project needs a dedicated private dev checkout separate from t
 
 ### Collecting docs from public history
 
-Once the layout is in place, `greenroom.py collect` recovers private-shaped files that were committed to the public repo and copies them into the right `<project>-private/<bucket>/`. Run from **inside the public repo** (`--public` defaults to cwd, which must be a git repo); the sibling private dir is auto-detected. Pass `--public`/`--private` to run from elsewhere.
+Once the layout is in place, `greenroom.py collect` recovers private-shaped files that were committed to the public repo and copies them into the right `<project>-private/<bucket>/`. Run from **inside the public repo** (`--public` defaults to cwd, which must be a git repo); the sibling private dir is auto-detected. Pass `--public`/`--private` to run from elsewhere. The script path below assumes a manual `install.sh` install; on a plugin install the script lives under `~/.claude/plugins/`, so substitute that path.
 
 ```bash
 cd <wrapper>/<project>-public

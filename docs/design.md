@@ -59,7 +59,7 @@ Because the canonical launch is at the wrapper, this access model is a safety ne
 For repos that already committed private-shaped docs to the public history, `collect` recovers them into the private dir. Two design choices matter:
 
 - **Copy-only, never rewrite.** Files are read from git at a specific commit SHA and written into the private dir. Public history is left exactly as it was. Actually scrubbing the public history is a `git filter-repo` operation with real blast radius, so it's intentionally out of scope. greenroom recovers the content; removing the originals is a deliberate, separate decision.
-- **Rules-only classification.** Path/filename patterns map a file to a bucket (`design`, `notes`, `drafts`, `reviews`, `research`). Two sources are scanned: the default branch (files matching private-shaped path rules) and unmerged branches whose names start with `design/`, `notes/`, `drafts/`, or `private/`, the branch-name prefix being a retroactive signal that the work was meant to stay private. The default is a dry run; nothing is copied until you pass `--apply`, so you review the plan first.
+- **Rules-only classification.** Path/filename patterns map a file to a bucket (`docs`, `notes`, `drafts`, `reviews`, `research`). Two sources are scanned: the default branch (files matching private-shaped path rules) and unmerged branches whose names start with `design/`, `notes/`, `drafts/`, or `private/`, the branch-name prefix being a retroactive signal that the work was meant to stay private. The default is a dry run; nothing is copied until you pass `--apply`, so you review the plan first.
 
 ## The private fork model
 
