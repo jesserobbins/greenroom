@@ -23,7 +23,7 @@ greenroom keeps that work under git, in a **private** repo that sits right besid
     └── research/  # transcripts, links, experiments
 ```
 
-The parent folder has no `.git/` of its own. It's an organizational container, so one `cd ~/GitHub/<project>/` puts both halves of the project in front of you. greenroom also writes a VS Code workspace and wires any coding agent to reach both repos from a single session (see ["One entry point, any editor"](#one-entry-point-any-editor)).
+The parent folder has no `.git/` of its own. It's an organizational container, so one `cd ~/src/<project>/` puts both halves of the project in front of you. greenroom also writes a VS Code workspace and wires any coding agent to reach both repos from a single session (see ["One entry point, any editor"](#one-entry-point-any-editor)).
 
 ## Install
 

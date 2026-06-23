@@ -34,7 +34,7 @@ A per-project layout: a parent folder per project holding two sibling git repos.
 └── <any-other-repo>/                # (optional) any git repo dropped under the wrapper
 ```
 
-The parent folder itself has no `.git/`: it's just an organizational container so that one `cd ~/GitHub/<project>/` puts every part of the project in front of you. The wrapper holds **two fixed repos** (`-public`, `-private`) plus **any number of optional ones**: a `-public-fork` to PR from, a `-private-fork`, more clones. Every git repo directly under the wrapper is auto-discovered and added to the workspace; `/greenroom-sync` picks up new ones.
+The parent folder itself has no `.git/`: it's just an organizational container so that one `cd ~/src/<project>/` puts every part of the project in front of you. The wrapper holds **two fixed repos** (`-public`, `-private`) plus **any number of optional ones**: a `-public-fork` to PR from, a `-private-fork`, more clones. Every git repo directly under the wrapper is auto-discovered and added to the workspace; `/greenroom-sync` picks up new ones.
 
 ### Agent orientation: AGENTS.md
 
