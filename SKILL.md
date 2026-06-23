@@ -23,7 +23,7 @@ A per-project layout: a parent folder per project holding two sibling git repos.
 │   ├── AGENTS.md                    # per-repo private orientation
 │   ├── CLAUDE.md                    # Claude adapter: exactly "@AGENTS.md"
 │   ├── README.md
-│   ├── design/    # design docs, RFCs, ADR drafts
+│   ├── docs/      # design docs, RFCs, ADR drafts
 │   ├── notes/     # dated working notes
 │   ├── drafts/    # PR/issue/blog drafts
 │   ├── reviews/   # private notes on PRs
@@ -87,7 +87,7 @@ Sources scanned:
 1. **Default branch (`main`/`master`)**: files matching the path-rule list (e.g. `docs/design/**`, `docs/architecture.md`, `**/rfc-*.md`). Docs that landed on main and probably shouldn't have.
 2. **Unmerged branches whose names start with a private prefix**: `design/`, `notes/`, `drafts/`, `private/`. Files reachable from those branches but absent from the default branch get pulled in. The branch-name convention is the retroactive signal: these prefixes mark branches that hold private-bound work, so anything on them that never reached main is a candidate. Override with repeated `--branch-prefix` flags.
 
-Classification is rules-only: path/filename maps to bucket (`design`, `notes`, `drafts`, `reviews`, `research`). Files on a private-prefix branch with no matching rule fall back to `design/`. Notes get a `YYYY-MM-DD-` filename prefix from the file's last-commit date unless they're already date-prefixed.
+Classification is rules-only: path/filename maps to bucket (`docs`, `notes`, `drafts`, `reviews`, `research`). Files on a private-prefix branch with no matching rule fall back to `docs/`. Notes get a `YYYY-MM-DD-` filename prefix from the file's last-commit date unless they're already date-prefixed.
 
 Same path on multiple branches → keep the **latest version** by commit date.
 

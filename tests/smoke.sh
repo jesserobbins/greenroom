@@ -42,6 +42,14 @@ grep -q '## Launch from the wrapper' "$pcm" || fail "private AGENTS.md not flipp
 ! grep -q 'CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD' "$pcm" || fail "private AGENTS.md still references the env-var task"
 ok "private AGENTS.md points launches at the wrapper"
 
+# --- retrofit with NO path argument operates on the current directory ---
+mkdir -p "$T/cwdcase"
+mkrepo "$T/cwdcase/inrepo"
+( cd "$T/cwdcase/inrepo" && "$SCRIPT" retrofit >/dev/null )
+[ -d "$T/cwdcase/inrepo/inrepo-public/.git" ] || fail "no-arg retrofit did not wrap the cwd repo"
+[ -d "$T/cwdcase/inrepo/inrepo-private/.git" ] || fail "no-arg retrofit did not scaffold the private dir"
+ok "retrofit with no path argument operates on the current directory"
+
 # --- guard: a non-repo dir is still rejected ---
 if "$SCRIPT" retrofit "$T/gh" >/dev/null 2>&1; then
   fail "retrofit accepted a non-repo directory"
@@ -393,7 +401,7 @@ fi
 ok "--with-private-fork: offer printed for -private and -private-fork; public excluded"
 
 # --- 14. collect: apply copies a text file (L1 regression -- binary-safe apply) ---
-mkdir -p "$T/applytest/applytest-private"/{design,notes,drafts,reviews,research}
+mkdir -p "$T/applytest/applytest-private"/{docs,notes,drafts,reviews,research}
 mkrepo "$T/applytest/applytest-public"
 ( cd "$T/applytest/applytest-public"
   printf 'hello apply\n' > notes.md
@@ -407,7 +415,7 @@ grep -rq 'hello apply' "$T/applytest/applytest-private/notes/" || fail "collect 
 ok "collect --apply copies a text file with content intact (L1 binary-safe)"
 
 # --- 15. collect: path-collision disambiguation preserves both files (C4 regression) ---
-mkdir -p "$T/colltest/colltest-private"/{design,notes,drafts,reviews,research}
+mkdir -p "$T/colltest/colltest-private"/{docs,notes,drafts,reviews,research}
 mkrepo "$T/colltest/colltest-public"
 ( cd "$T/colltest/colltest-public"
   mkdir -p sub/a sub/b
@@ -449,8 +457,8 @@ ok "_default_branch prefers local main over stale origin/HEAD (L3)"
 # --- 17. collect: a-b/foo-design.md AND a/b/foo-design.md both survive (M5 regression boundary) ---
 # Prior fix (slash-to-dash prefix rename) produced the same flat name for both;
 # one file was silently lost. The fix places each colliding file under a distinct
-# stable-hash directory: design/<shorthash>/foo-design.md.
-mkdir -p "$T/m5test/m5test-private"/{design,notes,drafts,reviews,research}
+# stable-hash directory: docs/<shorthash>/foo-design.md.
+mkdir -p "$T/m5test/m5test-private"/{docs,notes,drafts,reviews,research}
 mkrepo "$T/m5test/m5test-public"
 ( cd "$T/m5test/m5test-public"
   mkdir -p a-b a/b
@@ -556,7 +564,7 @@ ok "M7: _default_branch returns full slash-containing branch name release/stable
 # (with YYYY-MM-DD- date prefix) rather than src.name (undated).
 # Files land at notes/<shorthash>/YYYY-MM-DD-<name> with distinct hash dirs.
 # Use *.private.md suffix so both files classify into the notes bucket.
-mkdir -p "$T/m8test/m8test-private"/{design,notes,drafts,reviews,research}
+mkdir -p "$T/m8test/m8test-private"/{docs,notes,drafts,reviews,research}
 mkrepo "$T/m8test/m8test-public"
 ( cd "$T/m8test/m8test-public"
   mkdir -p team-a team-b

@@ -16,7 +16,7 @@ greenroom keeps that work under git, in a **private** repo that sits right besid
 ├── <project>-public/           # public code repo (the thing on GitHub: the stage)
 └── <project>-private/          # private notes repo (a separate private GitHub repo: the green room)
     ├── AGENTS.md  # private-side orientation
-    ├── design/    # design docs, RFCs, ADR drafts
+    ├── docs/      # design docs, RFCs, ADR drafts
     ├── notes/     # dated working notes
     ├── drafts/    # PR/issue/blog drafts
     ├── reviews/   # private notes on PRs
@@ -53,10 +53,11 @@ Two commands cover the common cases.
 **Add a green room to a repo you already have:**
 
 ```
-/greenroom-add ~/GitHub/<name>
+cd <your-repo> && /greenroom-add        # operates on the current directory
+/greenroom-add <path-to-repo>           # or point it at a path
 ```
 
-This moves the existing repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` next to it. Git history and the origin remote come along untouched. It works whether or not `~/GitHub` holds other repos.
+The most common case is running it from inside a repo you've already cloned, so the path is optional and defaults to the current directory. It moves the existing repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` next to it. Git history and the origin remote come along untouched. It works whether or not the parent holds other repos.
 
 **Start a fresh project:**
 

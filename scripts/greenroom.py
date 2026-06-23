@@ -31,7 +31,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 TEMPLATES_DIR = SKILL_DIR / "templates"
 
-PRIVATE_SUBDIRS = ["design", "notes", "drafts", "reviews", "research"]
+PRIVATE_SUBDIRS = ["docs", "notes", "drafts", "reviews", "research"]
 
 # Branch-name prefixes whose unmerged tips signal private-bound work.
 # Retroactive heuristic: files reachable from these refs but not from the
@@ -44,16 +44,16 @@ DEFAULT_BRANCH_PREFIXES = ("design/", "notes/", "drafts/", "private/")
 # Conservative defaults: only files that look unambiguously like private
 # notes. The user reviews the dry-run plan before anything is copied.
 PATH_RULES: list[tuple[str, str]] = [
-    # design/
-    ("docs/design/**", "design"),
-    ("docs/rfcs/**", "design"),
-    ("docs/adr/**", "design"),
-    ("design/**", "design"),
-    ("rfcs/**", "design"),
-    ("**/rfc-*.md", "design"),
-    ("**/*-design.md", "design"),
-    ("**/design.md", "design"),
-    ("**/architecture.md", "design"),
+    # docs/ (design docs, RFCs, ADRs)
+    ("docs/design/**", "docs"),
+    ("docs/rfcs/**", "docs"),
+    ("docs/adr/**", "docs"),
+    ("design/**", "docs"),
+    ("rfcs/**", "docs"),
+    ("**/rfc-*.md", "docs"),
+    ("**/*-design.md", "docs"),
+    ("**/design.md", "docs"),
+    ("**/architecture.md", "docs"),
     # drafts/
     ("drafts/**", "drafts"),
     ("**/draft-*.md", "drafts"),
@@ -795,7 +795,7 @@ def _looks_like_wrapper(parent: Path, project_name: str, src: Path) -> bool:
 
 
 def cmd_retrofit(args: argparse.Namespace) -> None:
-    src = Path(args.path).expanduser().resolve()
+    src = Path(args.path).expanduser().resolve() if args.path else Path.cwd()
     if not src.is_dir():
         die(f"{src} is not a directory")
     if not is_git_repo(src):
@@ -1238,7 +1238,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
     for path, (ref, sha, date) in sorted(candidates.items()):
         bucket = _classify(path)
         if bucket is None:
-            bucket = "design"
+            bucket = "docs"
         src = Path(path)
         target_name = src.name
         if target_name.lower() in generic and src.parent != Path("."):
@@ -1265,9 +1265,9 @@ def cmd_collect(args: argparse.Namespace) -> None:
     for path, (ref, sha, date) in sorted(candidates.items()):
         bucket = _classify(path)
         if bucket is None:
-            # On a private-prefix branch but no path rule matched -- default to design/.
+            # On a private-prefix branch but no path rule matched -- default to docs/.
             # User reviews before --apply.
-            bucket = "design"
+            bucket = "docs"
         target_name = _target_names[path]
         if (bucket, target_name.lower()) in _colliding_keys:
             # Collision resolution: place under a fixed-depth stable-hash directory
@@ -1369,7 +1369,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Wrap an existing public repo",
         description="Move an existing public repo into a wrapper folder and add a sibling private notes repo.",
     )
-    p_retro.add_argument("path", help="Path to existing public repo")
+    p_retro.add_argument(
+        "path", nargs="?", help="Path to existing public repo (default: current directory)"
+    )
     p_retro.add_argument("--name", help="Project name (default: basename of path)")
     p_retro.add_argument(
         "--public-name",

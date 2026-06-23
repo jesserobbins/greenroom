@@ -1,9 +1,9 @@
 ---
 description: Add a private notes repo alongside an existing public repo (moves the public repo into a wrapper folder and scaffolds <project>-private/ as a sibling)
-argument-hint: <path-to-existing-public-repo> [--name <project>] [--with-private-fork] [--public-name <dir>] [--private-name <dir>]
+argument-hint: [path-to-existing-public-repo] [--name <project>] [--with-private-fork] [--public-name <dir>] [--private-name <dir>]
 ---
 
-Run the greenroom script's `retrofit` subcommand with the user's arguments.
+Run the greenroom script's `retrofit` subcommand with the user's arguments. The path is optional: with no path, it operates on the current directory, so a user already inside their repo can just run the command.
 
 The script lives at `~/.claude/skills/greenroom/scripts/greenroom.py`. Invoke it via Bash:
 

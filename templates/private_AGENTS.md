@@ -12,7 +12,7 @@ This repo holds material that is under version control but never published: desi
 
 ## Layout
 
-- `design/` -- design docs, RFCs, ADR drafts
+- `docs/` -- design docs, RFCs, ADR drafts
 - `notes/` -- dated working notes (`YYYY-MM-DD-topic.md`)
 - `drafts/` -- PR/issue/blog drafts before publishing
 - `reviews/` -- private notes on PRs (own pre-merge thinking, contributor PRs)
@@ -21,7 +21,7 @@ This repo holds material that is under version control but never published: desi
 ## Conventions
 
 - Reference public artifacts by GitHub URL (commit SHA or PR number), not local paths. Survives renames and clones across machines.
-- Date-prefix working notes; leave design docs unprefixed so `ls design/` reads as a table of contents.
+- Date-prefix working notes; leave design docs unprefixed so `ls docs/` reads as a table of contents.
 - When a design doc matters enough to cite from a public PR, **publish it** (or a redacted version) into `../{{PUBLIC_DIR_NAME}}/docs/` and link there. Never link a public artifact to a path in this repo.
 
 ## Leak hygiene
