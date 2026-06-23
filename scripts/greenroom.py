@@ -231,7 +231,7 @@ def write_code_workspace(
     settings: dict[str, object] = {
         "git.openRepositoryInParentFolders": "never",
         "git.detectSubmodules": False,
-        "window.title": f"{project_name} — ${{activeFolderShort}}${{separator}}${{rootName}}",
+        "window.title": f"{project_name}: ${{activeFolderShort}}${{separator}}${{rootName}}",
         "workbench.colorCustomizations": project_accent(project_name),
     }
     if canonical:
@@ -379,7 +379,7 @@ def _repo_role(name: str) -> str:
     if name.endswith("-public"):
         return "your public repo, the stage; where public work lands"
     if name.endswith("-private"):
-        return "private notes — design docs, drafts, reviews (never published)"
+        return "private notes: design docs, drafts, reviews (never published)"
     return "repo under this project"
 
 
@@ -387,16 +387,16 @@ def _readme_block(project_name: str, repos: list[str], canonical: Optional[str])
     lines = [
         README_BEGIN,
         "",
-        f"## {project_name} — workspace map",
+        f"## {project_name} workspace map",
         "",
-        f"Multi-repo project. Open it through `{project_name}.code-workspace` — "
+        f"Multi-repo project. Open it through `{project_name}.code-workspace`, "
         "never `Open Folder` on this directory or a single repo.",
         "",
     ]
     if canonical:
         lines += [
-            f"**Launch home:** this wrapper directory. From any terminal: `cd {project_name} && claude` "
-            "(or, in this dir, just `claude`). That keeps session history + memory in one bucket and gives "
+            f"**Launch home:** this wrapper directory. From any terminal: `cd {project_name} && <your-agent>` "
+            "(claude, codex, gemini, and so on). That keeps session history and memory in one bucket and gives "
             "the session every child repo with no extra wiring. VS Code users can run the "
             f"`Claude Code ({canonical})` task or open `{project_name}.code-workspace`. After adding a new "
             "repo under this wrapper, run `/greenroom-sync` (or `scripts/greenroom.py sync`) to wire it in.",
@@ -408,9 +408,9 @@ def _readme_block(project_name: str, repos: list[str], canonical: Optional[str])
         lines.append(f"| `{r}/`{marker} | {_repo_role(r)} |")
     lines += [
         "",
-        "This folder is the project container, not a git repo. **Launch Claude here, at the wrapper** "
-        "(`cd <wrapper> && claude`) — every repo below is then reachable as a subdirectory, and each repo's "
-        "own `CLAUDE.md` loads automatically the first time you touch its files. If you launch inside a single "
+        "This folder is the project container, not a git repo. **Launch your agent here, at the wrapper** "
+        "(`cd <wrapper> && <your-agent>`). Every repo below is then reachable as a subdirectory, and each repo's "
+        "own `AGENTS.md` loads automatically the first time the agent touches its files. If you launch inside a single "
         "repo instead, you get a separate session bucket and only that repo's siblings via its "
         "`.claude/settings.local.json` grant.",
         "",

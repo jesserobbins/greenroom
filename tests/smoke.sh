@@ -161,9 +161,9 @@ then
   fail "per-repo settings.local.json did not enumerate the correct siblings"
 fi
 grep -q "workspace map" "$T/multi/README.md" || fail "sync did not write the repo-map README"
-grep -q 'cd .* && claude' "$T/multi/README.md" || fail "README does not lead with the launch primitive"
+grep -q 'cd .* && <your-agent>' "$T/multi/README.md" || fail "README does not lead with the launch primitive"
 grep -q '/greenroom-sync\|greenroom.py sync' "$T/multi/README.md" || fail "README references a non-runnable sync command"
-grep -q 'Launch Claude here, at the wrapper' "$T/multi/README.md" || fail "README trailing paragraph must point launches at the wrapper, not a sub-repo"
+grep -q 'Launch your agent here, at the wrapper' "$T/multi/README.md" || fail "README trailing paragraph must point launches at the wrapper, not a sub-repo"
 
 # --- wrapper CLAUDE.md (pointer) and AGENTS.md (content) are generated (feature) ---
 cm="$T/multi/CLAUDE.md"
