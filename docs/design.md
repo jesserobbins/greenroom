@@ -4,7 +4,7 @@ Why the layout is shaped the way it is. This is the public, durable rationale; i
 
 ## The problem
 
-Plans, design docs, and intermediate thinking are some of the most valuable context a project has, for humans and increasingly for coding agents. But checking them into a public repo feels vulnerable, and most of it doesn't belong in the shipped artifact anyway. The usual fallback is to scatter that thinking across notes apps, chat DMs, and untracked scratch files, where it can't be versioned, diffed, searched, or handed to an agent working in the repo.
+Your [superpowers](https://github.com/obra/Superpowers) docs, designs, plans, PRDs, and intermediate thinking are some of the most valuable context a project has, for humans and increasingly for coding agents. But checking them into a public repo feels vulnerable, and most of it doesn't belong in the shipped artifact anyway. The usual fallback is to scatter that thinking across notes apps, chat DMs, and untracked scratch files, where it can't be versioned, diffed, searched, or handed to an agent working in the repo.
 
 greenroom's answer: keep the thinking under git, in a **private** repo that lives right next to the public one, so it has all the benefits of version control and agent-reachability while never riding along in a public push.
 

@@ -1,12 +1,12 @@
 # greenroom
 
-> greenroom is a skill that sets up and maintains private spaces for working on docs, plans, and files until you decide what you want to share publicly.
+> greenroom is a skill that sets up and maintains private spaces for working on your [superpowers](https://github.com/obra/Superpowers) docs, designs, plans, PRDs, and more until you decide what you want to share publicly.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ## Why greenroom?
 
-Writing your plans, design docs, and thinking down generates rich context for both you, your team, and your agents. Checking that thinking into a *public* repo feels vulnerable and intimate for some. For me, it feels like [stepping on to a stage to perform](https://jesserobbins.com/mentions/velocity-2012-changing-culture-force-awesome-oreilly/)... and I only want to do that when I am prepared and ready. In the theatre and conferences, the **[Green Room](https://en.wikipedia.org/wiki/Green_room)** is the private space where performers prepare to take the stage.
+Writing your superpowers docs, designs, plans, and PRDs down generates rich context for both you, your team, and your agents. Checking that thinking into a *public* repo feels vulnerable and intimate for some. For me, it feels like [stepping on to a stage to perform](https://jesserobbins.com/mentions/velocity-2012-changing-culture-force-awesome-oreilly/)... and I only want to do that when I am prepared and ready. In the theatre and conferences, the **[Green Room](https://en.wikipedia.org/wiki/Green_room)** is the private space where performers prepare to take the stage.
 
 greenroom keeps that work under git, in a **private** repo that sits right beside the public one. Two sibling repos under a single project folder: the polished code on one side (the stage), the raw thinking on the other (the green room). You do high-quality work in private, and the only thing that reaches the stage is the finished result.
 
