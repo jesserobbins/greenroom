@@ -1086,8 +1086,11 @@ def _default_branch(repo: Path) -> str:
     r = run(["git", "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo, check=False)
     if r.returncode == 0 and r.stdout.strip():
         # refs/remotes/origin/HEAD -> refs/remotes/origin/<branch>
-        remote_ref = r.stdout.strip()  # e.g. "refs/remotes/origin/master"
-        branch = remote_ref.split("/")[-1]  # e.g. "master"
+        # Use strip-prefix rather than split("/")[-1] so slash-containing branch
+        # names like "release/stable" are preserved in full.
+        remote_ref = r.stdout.strip()  # e.g. "refs/remotes/origin/release/stable"
+        _prefix = "refs/remotes/origin/"
+        branch = remote_ref[len(_prefix):] if remote_ref.startswith(_prefix) else remote_ref.split("/")[-1]
         # Prefer the local tracking branch if it exists (avoids "origin/" prefix
         # in git commands and stays close to the locally-committed tree).
         local = run(["git", "rev-parse", "--verify", branch], cwd=repo, check=False)
@@ -1246,6 +1249,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
             _colliding.add((bucket, tname_lower))
 
     plan: list[tuple[str, str, Path, str, str, str]] = []  # (src_path, bucket, target, ref, sha, date)
+    _nested_paths: set[str] = set()  # src_paths that were disambiguated by nesting
     for path, (ref, sha, date) in sorted(candidates.items()):
         bucket = _classify(path)
         if bucket is None:
@@ -1259,11 +1263,16 @@ def cmd_collect(args: argparse.Namespace) -> None:
         # same target (a-b/foo.md and a/b/foo.md land in different subdirs).
         # A flat rename like str(parent).replace("/", "-") is NOT safe because
         # "a-b/foo.md" and "a/b/foo.md" both produce "a-b-foo.md".
+        # Use target_name (not src.name) so naming conventions like the YYYY-MM-DD
+        # date prefix for notes are preserved even in the nested/colliding path.
         if (bucket, target_name.lower()) in _colliding:
             if src.parent != Path("."):
-                # Place under bucket/<relative-parent>/<filename> to guarantee
-                # distinct targets for any two distinct source paths.
-                target = private / bucket / src
+                # Place under bucket/<relative-parent>/<target_name> to guarantee
+                # distinct targets for any two distinct source paths, while keeping
+                # the computed target_name (with date prefix, generic-basename
+                # parent prefix, etc.) intact.
+                target = private / bucket / src.parent / target_name
+                _nested_paths.add(path)
                 plan.append((path, bucket, target, ref, sha, date))
                 continue
         target = private / bucket / target_name
@@ -1289,9 +1298,9 @@ def cmd_collect(args: argparse.Namespace) -> None:
     for src_path, bucket, target, ref, sha, _ in plan:
         rel_target = target.relative_to(private.parent) if target.is_relative_to(private.parent) else target
         info(f"  [{bucket:<8}] {src_path}")
-        orig = _target_names.get(src_path)
-        if orig and target.name != orig:
-            info(f"             note: placed at {src_path} (path-collision disambiguation)")
+        # Report any nested/relocated placement, not just basename changes.
+        if src_path in _nested_paths:
+            info(f"             note: nested under parent dir to resolve path-collision")
         info(f"             -> {rel_target}")
         info(f"             from {ref} @ {sha[:10]}")
 

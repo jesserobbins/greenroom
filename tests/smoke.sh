@@ -437,6 +437,11 @@ found_ab="$(find "$T/m5test/m5test-private" -type f -name 'foo-design.md' | wc -
 # Content from each source must be present somewhere in the private tree.
 grep -rq 'from a-b dir' "$T/m5test/m5test-private" || fail "M5: content from a-b/foo-design.md not found in private"
 grep -rq 'from a/b dir' "$T/m5test/m5test-private" || fail "M5: content from a/b/foo-design.md not found in private"
+# Both files must land in DISTINCT directories (the nesting actually separated them).
+path_ab="$(find "$T/m5test/m5test-private" -type f -name 'foo-design.md' | sort)"
+dir1="$(echo "$path_ab" | head -1 | xargs dirname)"
+dir2="$(echo "$path_ab" | tail -1 | xargs dirname)"
+[ "$dir1" != "$dir2" ] || fail "M5: both foo-design.md files share the same parent dir ($dir1); collision was not separated"
 ok "M5: a-b/foo-design.md and a/b/foo-design.md both survive as distinct files (collision boundary)"
 
 # --- 18. _default_branch uses origin/HEAD default over stray local main (M6 regression boundary) ---
@@ -472,5 +477,68 @@ PY
 )"
 [ "$m6_out" = "master" ] || fail "M6: expected 'master', got '$m6_out' (stray local main must not override origin/HEAD)"
 ok "M6: _default_branch returns master when origin/HEAD says master, even with stray local main (M6 boundary)"
+
+# --- 19. _default_branch preserves slash-containing branch names (M7 regression boundary) ---
+# origin/HEAD points at refs/remotes/origin/release/stable.
+# split("/")[-1] would return "stable" (wrong); the fix strips the fixed prefix
+# "refs/remotes/origin/" and keeps the full remainder "release/stable".
+mkdir -p "$T/m7test"
+( cd "$T/m7test"
+  git init -q slash-repo
+  git -C slash-repo config user.email t@t
+  git -C slash-repo config user.name t
+  git -C slash-repo symbolic-ref HEAD refs/heads/release/stable
+  echo x > slash-repo/README.md
+  git -C slash-repo add -A
+  git -C slash-repo commit -qm init
+  # Wire up a bare origin so origin/HEAD can point at release/stable.
+  git init --bare -q slash-origin
+  git -C slash-repo remote add origin "$T/m7test/slash-origin"
+  git -C slash-repo push -q origin 'release/stable'
+  git -C slash-origin symbolic-ref HEAD refs/heads/release/stable
+  git -C slash-repo fetch -q origin
+  git -C slash-repo remote set-head origin release/stable
+)
+m7_out="$(SCRIPT="$SCRIPT" python3 - "$T/m7test/slash-repo" <<'PY'
+import importlib.util, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("pd", os.environ["SCRIPT"])
+pd = importlib.util.module_from_spec(spec); spec.loader.exec_module(pd)
+print(pd._default_branch(Path(sys.argv[1])))
+PY
+)"
+[ "$m7_out" = "release/stable" ] || fail "M7: expected 'release/stable', got '$m7_out' (slash in branch name must be preserved)"
+ok "M7: _default_branch returns full slash-containing branch name release/stable (M7 boundary)"
+
+# --- 20. collect: colliding notes both land dated (M8 regression boundary) ---
+# Two notes-bucket files that share the same basename but live in different
+# parent dirs, so they collide. The collision branch must apply target_name
+# (with YYYY-MM-DD- date prefix) rather than src.name (undated).
+# Use *.private.md suffix so both files classify into the notes bucket.
+mkdir -p "$T/m8test/m8test-private"/{design,notes,drafts,reviews,research}
+mkrepo "$T/m8test/m8test-public"
+( cd "$T/m8test/m8test-public"
+  mkdir -p team-a team-b
+  printf 'from team-a\n' > team-a/standup.private.md
+  printf 'from team-b\n' > team-b/standup.private.md
+  git add -A && git commit -qm "add colliding notes"
+)
+"$SCRIPT" collect --public "$T/m8test/m8test-public" \
+  --private "$T/m8test/m8test-private" --apply >/dev/null
+# Both files must exist in notes/ (distinct paths).
+notes_files="$(find "$T/m8test/m8test-private/notes" -type f | sort)"
+notes_count="$(echo "$notes_files" | wc -l | tr -d ' ')"
+[ "$notes_count" -ge 2 ] || fail "M8: expected 2 notes files after collision, found $notes_count"
+# Both must carry a YYYY-MM-DD- date prefix in their filename.
+while IFS= read -r f; do
+  fname="$(basename "$f")"
+  echo "$fname" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-' \
+    || fail "M8: colliding note '$fname' is missing the YYYY-MM-DD- date prefix"
+done <<< "$notes_files"
+# Both must land at distinct paths.
+ndir1="$(echo "$notes_files" | head -1 | xargs dirname)"
+ndir2="$(echo "$notes_files" | tail -1 | xargs dirname)"
+[ "$ndir1" != "$ndir2" ] || fail "M8: both colliding notes share the same parent dir ($ndir1); collision was not separated"
+ok "M8: colliding notes both land dated and in distinct dirs (M8 boundary)"
 
 echo "all $pass checks passed"
