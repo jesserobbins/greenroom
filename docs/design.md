@@ -20,7 +20,7 @@ Two sibling repos under a non-git parent folder keeps the two histories complete
 
 ## Why the parent folder has no `.git/`
 
-The wrapper is an organizational container, not a repo. If it were a repo, you'd have a repo-of-repos (submodule territory) and tooling would get confused about which thing it's operating on. Keeping it inert means `cd ~/GitHub/<project>/` is just "here is everything for this project," and each repo underneath is operated on independently.
+The wrapper is an organizational container, not a repo. If it were a repo, you'd have a repo-of-repos (submodule territory) and tooling would get confused about which thing it's operating on. Keeping it inert means `cd ~/src/<project>/` is just "here is everything for this project," and each repo underneath is operated on independently.
 
 ## Why `<project>-private`, not `private`
 

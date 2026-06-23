@@ -940,7 +940,7 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
 
 
 def cmd_new(args: argparse.Namespace) -> None:
-    parent = Path(args.parent or "~/GitHub").expanduser().resolve()
+    parent = Path(args.parent).expanduser().resolve() if args.parent else Path.cwd()
     if not parent.is_dir():
         die(f"parent dir {parent} does not exist")
 
@@ -1397,7 +1397,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Create a new wrapper folder with a private notes repo and (optionally) a public code repo.",
     )
     p_new.add_argument("name", help="Project name (becomes wrapper dir name)")
-    p_new.add_argument("--parent", help="Parent dir for the wrapper (default: ~/GitHub)")
+    p_new.add_argument("--parent", help="Parent dir for the wrapper (default: current directory)")
     p_new.add_argument(
         "--public-name",
         dest="public_name",

@@ -11,7 +11,7 @@ Writing your plans, design docs, and thinking down generates rich context for bo
 greenroom keeps that work under git, in a **private** repo that sits right beside the public one. Two sibling repos under a single project folder: the polished code on one side (the stage), the raw thinking on the other (the green room). You do high-quality work in private, and the only thing that reaches the stage is the finished result.
 
 ```
-~/GitHub/<project>/              # parent folder, not a git repo
+~/src/<project>/                 # parent folder, not a git repo
 ├── AGENTS.md                   # orientation for any agent launched here
 ├── <project>-public/           # public code repo (the thing on GitHub: the stage)
 └── <project>-private/          # private notes repo (a separate private GitHub repo: the green room)
@@ -88,9 +88,9 @@ Keeping it under git, not in a notes app, means your design thinking is versione
 The one rule is **launch your agent at the wrapper**: `cd <project> && <your-agent>` from any terminal. Examples:
 
 ```
-cd ~/GitHub/<project> && claude    # Claude Code
-cd ~/GitHub/<project> && codex     # OpenAI Codex
-cd ~/GitHub/<project> && gemini    # Gemini CLI
+cd ~/src/<project> && claude    # Claude Code
+cd ~/src/<project> && codex     # OpenAI Codex
+cd ~/src/<project> && gemini    # Gemini CLI
 ```
 
 Because every repo sits under the wrapper, the session can read and edit all of them with no extra wiring. Each repo's `AGENTS.md` loads automatically as the agent touches its files. Launching at the wrapper also keeps your session history in one bucket instead of fragmenting across `-public`, `-private`, and the rest.
@@ -100,7 +100,7 @@ greenroom produces `AGENTS.md` as its orientation standard. It is natively read 
 VS Code rides on top of that same wrapper rule. The script writes a `<project>.code-workspace` at the parent root that scans the wrapper and lists every repo it finds as a root, each with its own Source Control panel, canonical repo first. New terminals anchor to the wrapper, the **Claude Code** task launches `claude` there for you, and each project gets a title-bar color derived from its name so two open projects never look alike. Prefer a bare shell? A one-line alias does the same job:
 
 ```
-gr() { cd ~/GitHub/"$1" && claude; }   # or: codex, gemini, aider, …
+gr() { cd ~/src/"$1" && claude; }   # or: codex, gemini, aider, …
 ```
 
 As a safety net for a stray launch *inside* one repo, the script also writes a git-excluded `.claude/settings.local.json` into each repo granting its siblings (`../<name>`), so even then the others stay reachable. Those private paths never reach the public repo.

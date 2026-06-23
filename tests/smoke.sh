@@ -50,6 +50,12 @@ mkrepo "$T/cwdcase/inrepo"
 [ -d "$T/cwdcase/inrepo/inrepo-private/.git" ] || fail "no-arg retrofit did not scaffold the private dir"
 ok "retrofit with no path argument operates on the current directory"
 
+# --- new with NO --parent uses the current directory as the wrapper parent ---
+mkdir -p "$T/newcwd"
+( cd "$T/newcwd" && "$SCRIPT" new noparentproj >/dev/null )
+[ -d "$T/newcwd/noparentproj/noparentproj-private/.git" ] || fail "no-parent new did not scaffold under the cwd"
+ok "new with no --parent uses the current directory as the wrapper parent"
+
 # --- guard: a non-repo dir is still rejected ---
 if "$SCRIPT" retrofit "$T/gh" >/dev/null 2>&1; then
   fail "retrofit accepted a non-repo directory"

@@ -13,8 +13,8 @@ The script lives at `~/.claude/skills/greenroom/scripts/greenroom.py`. Invoke it
 
 The script will:
 - Refuse if the public repo has uncommitted changes (the user should commit or stash first).
-- Move the existing repo into a new `<wrapper>/<project>-public/` directory, preserving git history and the origin remote. The wrapper takes the project's name; `~/GitHub` (or wherever the repo lived) stays as the parent, and sibling repos there are untouched.
-- Scaffold `<wrapper>/<project>-private/` with a fresh git repo, an `AGENTS.md` with conventions for agents (plus a `CLAUDE.md` pointer for Claude Code), and `design/notes/drafts/reviews/research/` subdirs.
+- Move the existing repo into a new `<wrapper>/<project>-public/` directory, preserving git history and the origin remote. The wrapper takes the project's name; the repo's existing parent dir (e.g. `~/src`) stays as the parent, and sibling repos there are untouched.
+- Scaffold `<wrapper>/<project>-private/` with a fresh git repo, an `AGENTS.md` with conventions for agents (plus a `CLAUDE.md` pointer for Claude Code), and `docs/notes/drafts/reviews/research/` subdirs.
 - Write a `<project>.code-workspace` file at the wrapper root (the canonical entry point for editor work) listing every repo under the wrapper as a root, plus wrapper and per-repo `AGENTS.md` files, `<public>/.claude/settings.local.json` (Claude sibling-repo safety-net grant; git-excluded), `.gemini/settings.json` (Gemini adapter; git-excluded), and a wrapper `README.md` repo map.
 - Detect any Claude Code plugin configs that point at the old path and tell the user exactly which files need updating (it does not auto-edit those -- they are agent config and the user owns them).
 
@@ -43,6 +43,6 @@ If the script printed a "To create private GitHub repos for these (optional):" b
 - Make clear that declining leaves everything local -- nothing reaches GitHub without running these commands.
 - These are always `--private`. Do not offer or suggest a public variant.
 
-Re-running is idempotent, but point at the `-public` dir on the second run (e.g. `~/GitHub/<name>/<name>-public`): after the first run the wrapper is no longer a git repo, so the original path would be rejected.
+Re-running is idempotent, but point at the `-public` dir on the second run (e.g. `~/src/<name>/<name>-public`): after the first run the wrapper is no longer a git repo, so the original path would be rejected.
 
 Reference: full conventions and edge cases live in `~/.claude/skills/greenroom/SKILL.md`.

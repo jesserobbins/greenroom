@@ -10,7 +10,7 @@ A per-project layout: a parent folder per project holding two sibling git repos.
 ## The pattern
 
 ```
-~/GitHub/<project>/                  # parent folder, NOT a git repo
+~/src/<project>/                     # parent folder, NOT a git repo
 ├── AGENTS.md                        # wrapper orientation: read by any agent at launch
 ├── README.md                        # repo map for humans and agents (auto-managed by sync)
 ├── <project>.code-workspace         # canonical editor entry point
@@ -55,7 +55,7 @@ A VS Code multi-root workspace file (`<project>.code-workspace`) sits at the wra
 ## Slash commands
 
 - **`/greenroom-new <name> [--clone <url> | --init-public] [--parent <dir>]`**: create a new project from scratch. Optionally clone an existing public repo into it, init an empty public repo, or leave the public dir for the user to populate later.
-- **`/greenroom-add <path-to-existing-public-repo>`**: take an existing public repo (e.g. `~/GitHub/foo/`) and add the greenroom layout around it. Moves the public repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` alongside.
+- **`/greenroom-add <path-to-existing-public-repo>`**: take an existing public repo (e.g. `~/src/foo/`) and add the greenroom layout around it. Moves the public repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` alongside.
 - **`/greenroom-sync [--wrapper <dir>] [--canonical <repo-dir>]`**: re-scan an existing wrapper and update the workspace, agent working-dir access, and repo map. Run it after dropping a new repo (a `-public-fork`, another clone) under the wrapper so it gets wired in. Detects the wrapper from cwd; works from inside any of the project's repos.
 
 `/greenroom-new` and `/greenroom-add` invoke the script's `new` and `retrofit` subcommands; both accept `--public-name` and `--private-name` overrides if the defaults don't fit, otherwise the canonical names are derived from the project name. `/greenroom-sync` invokes the `sync` subcommand. All three regenerate the workspace + wiring (see "VS Code workspace" below).
@@ -97,10 +97,10 @@ After `--apply`, review `git -C <wrapper>/<project>-private status` and commit w
 
 | User situation | Command |
 |---|---|
-| Existing public repo at `~/GitHub/<name>/`, want to add private notes | `/greenroom-add ~/GitHub/<name>` |
+| Existing public repo at `~/src/<name>/`, want to add private notes | `/greenroom-add ~/src/<name>` |
 | Starting a new project, want to clone an existing public repo into it | `/greenroom-new <name> --clone <git-url>` |
 | Starting a new project, public repo doesn't exist yet | `/greenroom-new <name> --init-public` |
-| Already laid out, just want to (re-)create the private dir alongside an existing public dir | `/greenroom-add ~/GitHub/<name>/<name>-public` (re-runs are idempotent: detect the existing layout, add only the missing private dir). Point at the `-public` dir, not the wrapper: after the first run the wrapper is no longer a git repo, so the original path would be rejected. |
+| Already laid out, just want to (re-)create the private dir alongside an existing public dir | `/greenroom-add ~/src/<name>/<name>-public` (re-runs are idempotent: detect the existing layout, add only the missing private dir). Point at the `-public` dir, not the wrapper: after the first run the wrapper is no longer a git repo, so the original path would be rejected. |
 | Dropped a new repo (fork, extra clone) under an existing wrapper and want it wired into the workspace | `/greenroom-sync` from inside any of the project's repos |
 
 ## What the script does NOT do (and why)
@@ -122,7 +122,7 @@ The `<project>-private/AGENTS.md` written by the script tells any agent working 
 
 ## Edge cases the script handles
 
-- **Parent-name collision** (existing repo already at `~/GitHub/<name>/`): moves the repo to a temp path, creates the parent, then moves the repo into the parent as `<name>-public/`. If the move fails partway, the repo is restored to its original location with no stranded temp path.
+- **Parent-name collision** (existing repo already at `~/src/<name>/`): moves the repo to a temp path, creates the parent, then moves the repo into the parent as `<name>-public/`. If the move fails partway, the repo is restored to its original location with no stranded temp path.
 - **Working tree dirty**: refuses to retrofit if the public repo has uncommitted changes. Commit or stash first.
 - **Parent already exists and non-empty**: refuses to overwrite. Manual cleanup required.
 - **Idempotent re-runs**: if the source path is already inside its target parent structure, the script detects this and only adds the missing private dir (does not double-create). Recognizes both the canonical `<project>-private/` and legacy `private/` as already-existing.
@@ -176,5 +176,5 @@ After running the script, the model should remind the user to:
    git push -u origin main
    ```
 3. **Open VS Code via the new `<project>.code-workspace` file** (not via `Open Folder` on the wrapper or either repo). If a previous VS Code window had the old layout open, close it first.
-4. **Update shell aliases** that hardcoded the old `~/GitHub/<name>/` path (now the parent folder, not the repo).
+4. **Update shell aliases** that hardcoded the old `~/src/<name>/` path (now the parent folder, not the repo).
 5. **One-time global hygiene** (only if not already done): add `.notes`, `NOTES.md`, `SCRATCH.md`, `*.private.md`, `.private/` to `~/.config/git/ignore` so private-flavored filenames can't accidentally land in public repos from a fresh clone.
