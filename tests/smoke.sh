@@ -418,9 +418,9 @@ PY
 ok "_default_branch prefers local main over stale origin/HEAD (L3)"
 
 # --- 17. collect: a-b/foo-design.md AND a/b/foo-design.md both survive (M5 regression boundary) ---
-# The slash-to-dash prefix rename "a-b/foo.md" -> "a-b-foo.md" and
-# "a/b/foo.md" -> "a-b-foo.md" produce the same flat name -- one file was
-# silently lost. The fix preserves full relative path structure on collision.
+# Prior fix (slash-to-dash prefix rename) produced the same flat name for both;
+# one file was silently lost. The fix places each colliding file under a distinct
+# stable-hash directory: design/<shorthash>/foo-design.md.
 mkdir -p "$T/m5test/m5test-private"/{design,notes,drafts,reviews,research}
 mkrepo "$T/m5test/m5test-public"
 ( cd "$T/m5test/m5test-public"
@@ -437,12 +437,19 @@ found_ab="$(find "$T/m5test/m5test-private" -type f -name 'foo-design.md' | wc -
 # Content from each source must be present somewhere in the private tree.
 grep -rq 'from a-b dir' "$T/m5test/m5test-private" || fail "M5: content from a-b/foo-design.md not found in private"
 grep -rq 'from a/b dir' "$T/m5test/m5test-private" || fail "M5: content from a/b/foo-design.md not found in private"
-# Both files must land in DISTINCT directories (the nesting actually separated them).
+# Both files must land in DISTINCT parent directories (distinct hash dirs).
 path_ab="$(find "$T/m5test/m5test-private" -type f -name 'foo-design.md' | sort)"
 dir1="$(echo "$path_ab" | head -1 | xargs dirname)"
 dir2="$(echo "$path_ab" | tail -1 | xargs dirname)"
 [ "$dir1" != "$dir2" ] || fail "M5: both foo-design.md files share the same parent dir ($dir1); collision was not separated"
-ok "M5: a-b/foo-design.md and a/b/foo-design.md both survive as distinct files (collision boundary)"
+# The hash dirs themselves must be 8-char hex strings (new strategy, not old nesting).
+hash1="$(basename "$dir1")"
+hash2="$(basename "$dir2")"
+echo "$hash1" | grep -qE '^[0-9a-f]{8}$' || fail "M5: hash dir '$hash1' is not 8-char hex (wrong collision strategy?)"
+echo "$hash2" | grep -qE '^[0-9a-f]{8}$' || fail "M5: hash dir '$hash2' is not 8-char hex (wrong collision strategy?)"
+[ "$hash1" != "$hash2" ] || fail "M5: both files got the same hash dir ($hash1); hashes must differ for distinct source paths"
+# Coexistence of two files with the same name proves no file/dir conflict (the ancestor assertion fired pre-apply).
+ok "M5: a-b/foo-design.md and a/b/foo-design.md both survive as distinct files under distinct hash dirs (collision boundary)"
 
 # --- 18. _default_branch uses origin/HEAD default over stray local main (M6 regression boundary) ---
 # Repo whose true default is master; a stray local main also exists.
@@ -499,6 +506,10 @@ mkdir -p "$T/m7test"
   git -C slash-repo fetch -q origin
   git -C slash-repo remote set-head origin release/stable
 )
+# Assert setup is correct before calling _default_branch -- distinguishes setup failure from logic regression.
+m7_setup_ref="$(git -C "$T/m7test/slash-repo" symbolic-ref refs/remotes/origin/HEAD)"
+[ "$m7_setup_ref" = "refs/remotes/origin/release/stable" ] \
+  || fail "M7 setup: origin/HEAD points at '$m7_setup_ref', expected refs/remotes/origin/release/stable"
 m7_out="$(SCRIPT="$SCRIPT" python3 - "$T/m7test/slash-repo" <<'PY'
 import importlib.util, os, sys
 from pathlib import Path
@@ -514,6 +525,7 @@ ok "M7: _default_branch returns full slash-containing branch name release/stable
 # Two notes-bucket files that share the same basename but live in different
 # parent dirs, so they collide. The collision branch must apply target_name
 # (with YYYY-MM-DD- date prefix) rather than src.name (undated).
+# Files land at notes/<shorthash>/YYYY-MM-DD-<name> with distinct hash dirs.
 # Use *.private.md suffix so both files classify into the notes bucket.
 mkdir -p "$T/m8test/m8test-private"/{design,notes,drafts,reviews,research}
 mkrepo "$T/m8test/m8test-public"
@@ -535,10 +547,15 @@ while IFS= read -r f; do
   echo "$fname" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-' \
     || fail "M8: colliding note '$fname' is missing the YYYY-MM-DD- date prefix"
 done <<< "$notes_files"
-# Both must land at distinct paths.
+# Both must land at distinct hash dirs (notes/<hash>/YYYY-MM-DD-<name>).
 ndir1="$(echo "$notes_files" | head -1 | xargs dirname)"
 ndir2="$(echo "$notes_files" | tail -1 | xargs dirname)"
 [ "$ndir1" != "$ndir2" ] || fail "M8: both colliding notes share the same parent dir ($ndir1); collision was not separated"
-ok "M8: colliding notes both land dated and in distinct dirs (M8 boundary)"
+nhash1="$(basename "$ndir1")"
+nhash2="$(basename "$ndir2")"
+echo "$nhash1" | grep -qE '^[0-9a-f]{8}$' || fail "M8: hash dir '$nhash1' is not 8-char hex"
+echo "$nhash2" | grep -qE '^[0-9a-f]{8}$' || fail "M8: hash dir '$nhash2' is not 8-char hex"
+[ "$nhash1" != "$nhash2" ] || fail "M8: both colliding notes got the same hash dir ($nhash1); hashes must differ"
+ok "M8: colliding notes both land dated under distinct hash dirs (M8 boundary)"
 
 echo "all $pass checks passed"

@@ -1224,8 +1224,10 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "scratch.md", "draft.md", "review.md", "research.md", "spec.md",
     }
 
-    # First pass: compute a candidate target_name for each source path.
-    _target_names: dict[str, str] = {}  # src_path -> target_name (flat name, before bucket dir)
+    # First pass: compute target_name for each source path and detect collisions.
+    # target_name is the flat filename (with date prefix for notes, parent prefix
+    # for generic basenames). Collision detection uses (bucket, target_name_lower).
+    _target_names: dict[str, str] = {}  # src_path -> target_name
     _src_by_name: dict[tuple[str, str], list[str]] = {}  # (bucket, target_name_lower) -> [src_paths]
     for path, (ref, sha, date) in sorted(candidates.items()):
         bucket = _classify(path)
@@ -1242,51 +1244,65 @@ def cmd_collect(args: argparse.Namespace) -> None:
         key = (bucket, target_name.lower())
         _src_by_name.setdefault(key, []).append(path)
 
-    # Detect collisions: record which (bucket, name) keys have > 1 source path.
-    _colliding: set[tuple[str, str]] = set()
-    for (bucket, tname_lower), paths_for_name in _src_by_name.items():
-        if len(paths_for_name) > 1:
-            _colliding.add((bucket, tname_lower))
+    # Detect collisions: (bucket, target_name_lower) keys with more than one source path.
+    _colliding_keys: set[tuple[str, str]] = {
+        key for key, paths_for_name in _src_by_name.items() if len(paths_for_name) > 1
+    }
+    # Track which src_paths are in a collision (for plan display).
+    _colliding_srcs: set[str] = {
+        path
+        for key in _colliding_keys
+        for path in _src_by_name[key]
+    }
 
     plan: list[tuple[str, str, Path, str, str, str]] = []  # (src_path, bucket, target, ref, sha, date)
-    _nested_paths: set[str] = set()  # src_paths that were disambiguated by nesting
     for path, (ref, sha, date) in sorted(candidates.items()):
         bucket = _classify(path)
         if bucket is None:
             # On a private-prefix branch but no path rule matched -- default to design/.
             # User reviews before --apply.
             bucket = "design"
-        src = Path(path)
         target_name = _target_names[path]
-        # Collision resolution: preserve the full relative directory structure
-        # under the bucket dir so two distinct source paths can never share the
-        # same target (a-b/foo.md and a/b/foo.md land in different subdirs).
-        # A flat rename like str(parent).replace("/", "-") is NOT safe because
-        # "a-b/foo.md" and "a/b/foo.md" both produce "a-b-foo.md".
-        # Use target_name (not src.name) so naming conventions like the YYYY-MM-DD
-        # date prefix for notes are preserved even in the nested/colliding path.
-        if (bucket, target_name.lower()) in _colliding:
-            if src.parent != Path("."):
-                # Place under bucket/<relative-parent>/<target_name> to guarantee
-                # distinct targets for any two distinct source paths, while keeping
-                # the computed target_name (with date prefix, generic-basename
-                # parent prefix, etc.) intact.
-                target = private / bucket / src.parent / target_name
-                _nested_paths.add(path)
-                plan.append((path, bucket, target, ref, sha, date))
-                continue
-        target = private / bucket / target_name
+        if (bucket, target_name.lower()) in _colliding_keys:
+            # Collision resolution: place under a fixed-depth stable-hash directory
+            # derived from the full source path.  Two distinct source paths always
+            # produce distinct hashes; the hex directory can never equal a target
+            # filename or be an ancestor of another target.  target_name (with its
+            # date prefix, generic-basename parent prefix, etc.) is preserved inside.
+            shorthash = hashlib.sha1(path.encode()).hexdigest()[:8]
+            target = private / bucket / shorthash / target_name
+        else:
+            target = private / bucket / target_name
         plan.append((path, bucket, target, ref, sha, date))
 
-    # Programming-error guard: every planned target must be unique.
-    seen_targets: set[Path] = set()
+    # Programming-error guard: (a) all target paths must be unique, and
+    # (b) no target path may be a prefix (ancestor) of another target path.
+    seen_targets: list[Path] = []
     for _, _, target, _, _, _ in plan:
-        if target in seen_targets:
-            raise RuntimeError(
-                f"collect produced duplicate target path: {target} -- "
-                "this is a bug; please report it"
-            )
-        seen_targets.add(target)
+        for prior in seen_targets:
+            if target == prior:
+                raise RuntimeError(
+                    f"collect produced duplicate target path: {target} -- "
+                    "this is a bug; please report it"
+                )
+            # Check ancestor relationship in both directions.
+            try:
+                target.relative_to(prior)
+                raise RuntimeError(
+                    f"collect: target {target} is nested under another target {prior} -- "
+                    "this is a bug; please report it"
+                )
+            except ValueError:
+                pass
+            try:
+                prior.relative_to(target)
+                raise RuntimeError(
+                    f"collect: target {prior} is nested under another target {target} -- "
+                    "this is a bug; please report it"
+                )
+            except ValueError:
+                pass
+        seen_targets.append(target)
 
     # Render plan.
     info(f"public:  {public}")
@@ -1298,9 +1314,8 @@ def cmd_collect(args: argparse.Namespace) -> None:
     for src_path, bucket, target, ref, sha, _ in plan:
         rel_target = target.relative_to(private.parent) if target.is_relative_to(private.parent) else target
         info(f"  [{bucket:<8}] {src_path}")
-        # Report any nested/relocated placement, not just basename changes.
-        if src_path in _nested_paths:
-            info(f"             note: nested under parent dir to resolve path-collision")
+        if src_path in _colliding_srcs:
+            info(f"             note: {src_path} -> {bucket}/{target.parent.name}/{target.name} (collision)")
         info(f"             -> {rel_target}")
         info(f"             from {ref} @ {sha[:10]}")
 
