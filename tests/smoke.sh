@@ -105,10 +105,10 @@ spec = importlib.util.spec_from_file_location("pd", os.environ["SCRIPT"])
 pd = importlib.util.module_from_spec(spec); spec.loader.exec_module(pd)
 cfg = Path(os.environ["HOME"]) / ".claude" / "settings.json"
 # superset path must NOT trigger a false positive
-assert pd.check_plugin_configs(Path("/Users/x/GitHub/foo"), Path("/new")) == [], "matched superset /x/foobar"
+assert pd.check_plugin_configs(Path("/Users/x/GitHub/foo")) == [], "matched superset /x/foobar"
 # exact path must be flagged
 cfg.write_text('{ "p": "/Users/x/GitHub/foo" }')
-assert pd.check_plugin_configs(Path("/Users/x/GitHub/foo"), Path("/new")) == [cfg], "exact path not flagged"
+assert pd.check_plugin_configs(Path("/Users/x/GitHub/foo")) == [cfg], "exact path not flagged"
 PY
 then
   fail "check_plugin_configs did not match at a component boundary"
@@ -416,5 +416,61 @@ PY
 )"
 [ "$db_out" = "main" ] || fail "_default_branch: expected 'main', got '$db_out' (should prefer local over origin/HEAD)"
 ok "_default_branch prefers local main over stale origin/HEAD (L3)"
+
+# --- 17. collect: a-b/foo-design.md AND a/b/foo-design.md both survive (M5 regression boundary) ---
+# The slash-to-dash prefix rename "a-b/foo.md" -> "a-b-foo.md" and
+# "a/b/foo.md" -> "a-b-foo.md" produce the same flat name -- one file was
+# silently lost. The fix preserves full relative path structure on collision.
+mkdir -p "$T/m5test/m5test-private"/{design,notes,drafts,reviews,research}
+mkrepo "$T/m5test/m5test-public"
+( cd "$T/m5test/m5test-public"
+  mkdir -p a-b a/b
+  printf 'from a-b dir\n' > a-b/foo-design.md
+  printf 'from a/b dir\n' > a/b/foo-design.md
+  git add -A && git commit -qm "add colliding design files"
+)
+"$SCRIPT" collect --public "$T/m5test/m5test-public" \
+  --private "$T/m5test/m5test-private" --apply >/dev/null
+# Both source paths must land as DISTINCT files (not the same target).
+found_ab="$(find "$T/m5test/m5test-private" -type f -name 'foo-design.md' | wc -l | tr -d ' ')"
+[ "$found_ab" -ge 2 ] || fail "M5: both a-b/foo-design.md and a/b/foo-design.md must land as distinct files; found $found_ab"
+# Content from each source must be present somewhere in the private tree.
+grep -rq 'from a-b dir' "$T/m5test/m5test-private" || fail "M5: content from a-b/foo-design.md not found in private"
+grep -rq 'from a/b dir' "$T/m5test/m5test-private" || fail "M5: content from a/b/foo-design.md not found in private"
+ok "M5: a-b/foo-design.md and a/b/foo-design.md both survive as distinct files (collision boundary)"
+
+# --- 18. _default_branch uses origin/HEAD default over stray local main (M6 regression boundary) ---
+# Repo whose true default is master; a stray local main also exists.
+# origin/HEAD points at master -- _default_branch must return master.
+mkdir -p "$T/m6test"
+( cd "$T/m6test"
+  git init -q master-repo
+  git -C master-repo config user.email t@t
+  git -C master-repo config user.name t
+  # Start on master branch (default for older git).
+  git -C master-repo symbolic-ref HEAD refs/heads/master
+  echo x > master-repo/README.md
+  git -C master-repo add -A
+  git -C master-repo commit -qm init
+  # Create a stray local main branch.
+  git -C master-repo branch main
+  # Wire up a bare "origin" so origin/HEAD can point at master.
+  git init --bare -q master-origin
+  git -C master-repo remote add origin "$T/m6test/master-origin"
+  git -C master-repo push -q origin master
+  git -C master-origin symbolic-ref HEAD refs/heads/master
+  git -C master-repo fetch -q origin
+  git -C master-repo remote set-head origin master
+)
+m6_out="$(SCRIPT="$SCRIPT" python3 - "$T/m6test/master-repo" <<'PY'
+import importlib.util, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("pd", os.environ["SCRIPT"])
+pd = importlib.util.module_from_spec(spec); spec.loader.exec_module(pd)
+print(pd._default_branch(Path(sys.argv[1])))
+PY
+)"
+[ "$m6_out" = "master" ] || fail "M6: expected 'master', got '$m6_out' (stray local main must not override origin/HEAD)"
+ok "M6: _default_branch returns master when origin/HEAD says master, even with stray local main (M6 boundary)"
 
 echo "all $pass checks passed"

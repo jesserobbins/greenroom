@@ -18,7 +18,9 @@ Modes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -128,8 +130,6 @@ def project_accent(project_name: str) -> dict[str, str]:
     visually distinct at a glance — no two open projects share a title-bar color
     unless their names collide.
     """
-    import hashlib
-
     hue = int(hashlib.md5(project_name.encode()).hexdigest(), 16) % 360
     base = _hsl_to_hex(hue, 0.42, 0.30)
     dark = _hsl_to_hex(hue, 0.40, 0.24)
@@ -323,7 +323,8 @@ def write_claude_settings_local(canonical_dir: Path, siblings: list[str]) -> Opt
             warn(f"{settings_path} is malformed JSON; leaving it untouched")
             return settings_path
         except OSError:
-            data = {}
+            warn(f"{settings_path} could not be read; leaving it untouched")
+            return settings_path
     perms = data.setdefault("permissions", {})
     dirs = perms.setdefault("additionalDirectories", [])
     for s in siblings:
@@ -494,7 +495,8 @@ def write_gemini_settings(wrapper: Path) -> tuple[Path, str]:
             warn(f"{settings_path} is malformed JSON; leaving it untouched")
             return settings_path, "skipped (malformed)"
         except OSError:
-            data = {}
+            warn(f"{settings_path} could not be read; leaving it untouched")
+            return settings_path, "skipped (unreadable)"
         status = "updated"
     context = data.setdefault("context", {})
     if context.get("fileName") == "AGENTS.md" and status == "updated":
@@ -737,17 +739,16 @@ def write_private_scaffold(
         (d / ".gitkeep").touch()
 
 
-def check_plugin_configs(old_path: Path, new_path: Path) -> list[Path]:
+def check_plugin_configs(old_path: Path) -> list[Path]:
     """Return list of Claude Code config files referencing the old repo path."""
     candidates = [
         Path.home() / ".claude" / "plugins" / "known_marketplaces.json",
         Path.home() / ".claude" / "settings.json",
     ]
-    import re
     found: list[Path] = []
     # Match the path only at a component boundary so /GitHub/foo doesn't also
     # flag /GitHub/foobar. The path may be followed by a quote, a path
-    # separator, or end-of-value — but not another path-name character.
+    # separator, or end-of-value, but not another path-name character.
     needle = re.compile(re.escape(str(old_path)) + r"(?![\w.\-])")
     for cfg in candidates:
         if not cfg.exists():
@@ -923,7 +924,7 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
     print_repo_creation_offer(wrapper, repos)
 
     if src != public_path:
-        flagged = check_plugin_configs(src, public_path)
+        flagged = check_plugin_configs(src)
         if flagged:
             info("")
             info("⚠  Claude Code plugin configs reference the OLD path:")
@@ -1069,19 +1070,41 @@ def _classify(repo_relative_path: str) -> Optional[str]:
 
 
 def _default_branch(repo: Path) -> str:
-    """Best-effort default branch: local main/master first, then origin/HEAD.
+    """Best-effort default branch name.
 
-    Prefer local branches over origin/HEAD so we scan the locally-committed
-    tree rather than a potentially stale remote ref on an unfetched repo.
-    Falls back to origin/HEAD only when no local main or master exists.
+    Priority:
+    1. origin/HEAD (the authoritative remote default): strip to the branch name,
+       then return the local counterpart if it exists, else the remote-tracking
+       ref if it is reachable. Only when neither is reachable (stale pointer to
+       a branch that was never fetched) fall through to the local heuristic.
+    2. When origin/HEAD is absent or unresolvable (local-only or unfetched repo):
+       try local main, then local master, then give up.
+
+    This avoids the bug where a stray local `main` was preferred over a repo
+    whose true default is `master` (or vice versa).
     """
+    r = run(["git", "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo, check=False)
+    if r.returncode == 0 and r.stdout.strip():
+        # refs/remotes/origin/HEAD -> refs/remotes/origin/<branch>
+        remote_ref = r.stdout.strip()  # e.g. "refs/remotes/origin/master"
+        branch = remote_ref.split("/")[-1]  # e.g. "master"
+        # Prefer the local tracking branch if it exists (avoids "origin/" prefix
+        # in git commands and stays close to the locally-committed tree).
+        local = run(["git", "rev-parse", "--verify", branch], cwd=repo, check=False)
+        if local.returncode == 0:
+            return branch
+        # No local branch; try the remote-tracking ref (requires a fetch, but may exist).
+        remote_tracking = f"origin/{branch}"
+        rt = run(["git", "rev-parse", "--verify", remote_tracking], cwd=repo, check=False)
+        if rt.returncode == 0:
+            return remote_tracking
+        # origin/HEAD exists but points at a ref that is not reachable locally
+        # (stale pointer, branch never fetched). Fall through to local heuristic.
+    # No usable origin/HEAD -- local-only or unfetched. Try well-known defaults.
     for candidate in ("main", "master"):
         r = run(["git", "rev-parse", "--verify", candidate], cwd=repo, check=False)
         if r.returncode == 0:
             return candidate
-    r = run(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=repo, check=False)
-    if r.returncode == 0 and r.stdout.strip():
-        return r.stdout.strip()  # e.g. "origin/main"
     die(f"could not determine default branch for {repo}")
     return ""  # unreachable
 
@@ -1190,19 +1213,17 @@ def cmd_collect(args: argparse.Namespace) -> None:
         return
 
     # Plan: assign each candidate a bucket and target path.
-    # Generic basenames that need a parent-dir prefix to avoid collisions
-    # when the same file exists in multiple subsystems (e.g. internal/query/DESIGN.md
-    # and internal/router/DESIGN.md both → DESIGN.md).
+    # Generic basenames that need disambiguation when two different source paths
+    # share the same name (e.g. internal/query/DESIGN.md and
+    # internal/router/DESIGN.md both -> DESIGN.md in the same bucket).
     generic = {
         "design.md", "readme.md", "notes.md", "rfc.md", "architecture.md",
         "scratch.md", "draft.md", "review.md", "research.md", "spec.md",
     }
-    import re as _re
+
     # First pass: compute a candidate target_name for each source path.
-    # We detect basename collisions across different source paths and
-    # disambiguate by prepending the parent dir name.
-    _target_names: dict[str, str] = {}  # src_path -> target_name (before bucket subdir)
-    _src_by_name: dict[tuple[str, str], list[str]] = {}  # (bucket, target_name) -> [src_paths]
+    _target_names: dict[str, str] = {}  # src_path -> target_name (flat name, before bucket dir)
+    _src_by_name: dict[tuple[str, str], list[str]] = {}  # (bucket, target_name_lower) -> [src_paths]
     for path, (ref, sha, date) in sorted(candidates.items()):
         bucket = _classify(path)
         if bucket is None:
@@ -1212,18 +1233,17 @@ def cmd_collect(args: argparse.Namespace) -> None:
         if target_name.lower() in generic and src.parent != Path("."):
             target_name = f"{src.parent.name}-{target_name}"
         if bucket == "notes":
-            if not _re.match(r"^\d{4}-\d{2}-\d{2}-", target_name):
+            if not re.match(r"^\d{4}-\d{2}-\d{2}-", target_name):
                 target_name = f"{date[:10]}-{target_name}"
         _target_names[path] = target_name
         key = (bucket, target_name.lower())
         _src_by_name.setdefault(key, []).append(path)
 
-    # Detect collisions: if two distinct source paths map to the same
-    # (bucket, target_name), disambiguate by prefixing with the parent dir.
-    _disambiguated: set[tuple[str, str]] = set()
+    # Detect collisions: record which (bucket, name) keys have > 1 source path.
+    _colliding: set[tuple[str, str]] = set()
     for (bucket, tname_lower), paths_for_name in _src_by_name.items():
         if len(paths_for_name) > 1:
-            _disambiguated.add((bucket, tname_lower))
+            _colliding.add((bucket, tname_lower))
 
     plan: list[tuple[str, str, Path, str, str, str]] = []  # (src_path, bucket, target, ref, sha, date)
     for path, (ref, sha, date) in sorted(candidates.items()):
@@ -1234,18 +1254,30 @@ def cmd_collect(args: argparse.Namespace) -> None:
             bucket = "design"
         src = Path(path)
         target_name = _target_names[path]
-        # If this target_name collides with another source in the same bucket,
-        # prepend the full relative parent path (slashes replaced with dashes)
-        # to make the target unique. Print a note so the user sees it.
-        if (bucket, target_name.lower()) in _disambiguated:
+        # Collision resolution: preserve the full relative directory structure
+        # under the bucket dir so two distinct source paths can never share the
+        # same target (a-b/foo.md and a/b/foo.md land in different subdirs).
+        # A flat rename like str(parent).replace("/", "-") is NOT safe because
+        # "a-b/foo.md" and "a/b/foo.md" both produce "a-b-foo.md".
+        if (bucket, target_name.lower()) in _colliding:
             if src.parent != Path("."):
-                prefix = str(src.parent).replace("/", "-").replace("\\", "-")
-                target_name = f"{prefix}-{src.name}"
-            # Re-apply date prefix for notes after disambiguation.
-            if bucket == "notes" and not _re.match(r"^\d{4}-\d{2}-\d{2}-", target_name):
-                target_name = f"{date[:10]}-{target_name}"
+                # Place under bucket/<relative-parent>/<filename> to guarantee
+                # distinct targets for any two distinct source paths.
+                target = private / bucket / src
+                plan.append((path, bucket, target, ref, sha, date))
+                continue
         target = private / bucket / target_name
         plan.append((path, bucket, target, ref, sha, date))
+
+    # Programming-error guard: every planned target must be unique.
+    seen_targets: set[Path] = set()
+    for _, _, target, _, _, _ in plan:
+        if target in seen_targets:
+            raise RuntimeError(
+                f"collect produced duplicate target path: {target} -- "
+                "this is a bug; please report it"
+            )
+        seen_targets.add(target)
 
     # Render plan.
     info(f"public:  {public}")
@@ -1254,15 +1286,12 @@ def cmd_collect(args: argparse.Namespace) -> None:
     info(f"branch prefixes: {', '.join(prefixes)}")
     info(f"candidates: {len(plan)}")
     info("")
-    # Collect disambiguated targets for the plan display note.
-    _orig_names = {p: _target_names[p] for p, _, _, _, _, _ in plan}
     for src_path, bucket, target, ref, sha, _ in plan:
         rel_target = target.relative_to(private.parent) if target.is_relative_to(private.parent) else target
         info(f"  [{bucket:<8}] {src_path}")
-        # Note when the filename was changed to avoid a collision.
-        orig = _orig_names.get(src_path)
+        orig = _target_names.get(src_path)
         if orig and target.name != orig:
-            info(f"             note: renamed {orig} -> {target.name} (path-collision disambiguation)")
+            info(f"             note: placed at {src_path} (path-collision disambiguation)")
         info(f"             -> {rel_target}")
         info(f"             from {ref} @ {sha[:10]}")
 
