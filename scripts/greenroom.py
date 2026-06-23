@@ -251,9 +251,10 @@ def write_code_workspace(
         folders.extend(f for f in desired_folders if f["path"] not in have)
         es = existing.setdefault("settings", {})
         # Refresh a window.title we generated in an older form (it once used an
-        # em dash); leave a user's custom title alone.
-        legacy_title = f"{project_name} — ${{activeFolderShort}}${{separator}}${{rootName}}"
-        if es.get("window.title") == legacy_title:
+        # em dash); match on the structural suffix so a renamed wrapper is still
+        # upgraded, and leave a user's custom title alone.
+        legacy_suffix = " — ${activeFolderShort}${separator}${rootName}"
+        if str(es.get("window.title", "")).endswith(legacy_suffix):
             es["window.title"] = settings["window.title"]
         for k, v in settings.items():
             es.setdefault(k, v)
