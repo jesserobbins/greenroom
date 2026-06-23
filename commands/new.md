@@ -5,10 +5,13 @@ argument-hint: <project-name> [--clone <git-url> | --init-public] [--with-privat
 
 Run the greenroom script's `new` subcommand with the user's arguments.
 
-The script ships with greenroom. Invoke it via Bash with `$ARGUMENTS` appended, using the form below so it resolves under both a plugin install (`$CLAUDE_PLUGIN_ROOT` is set) and a manual `install.sh` install (the `~/.claude/skills/greenroom` fallback):
+The script ships with greenroom. Resolve its path with the block below, then invoke it via Bash with `$ARGUMENTS` appended. The block tries the plugin env var, then the plugin cache (any owner/version), then the manual `install.sh` location -- so it works on a plugin install and a manual install alike:
 
-```
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/scripts/greenroom.py" new $ARGUMENTS
+```bash
+P="${CLAUDE_PLUGIN_ROOT:-}"
+[ -z "$P" ] && P=$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/ 2>/dev/null | sort -V | tail -1)
+[ -z "$P" ] && P="$HOME/.claude/skills/greenroom"
+"$P/scripts/greenroom.py" new $ARGUMENTS
 ```
 
 ## `--with-private-fork`
@@ -22,7 +25,7 @@ Use this when the project needs a dedicated private dev checkout separate from t
 - Summarize the wrapper folder, public repo path, private repo path, and (if created) the private-fork path, plus the `<project>.code-workspace`, wrapper `AGENTS.md` and per-repo `AGENTS.md` files (plus `CLAUDE.md` pointers and `.gemini/settings.json` adapters), the canonical repo's `.claude/settings.local.json` (Claude sibling-repo safety-net grant), and the wrapper `README.md` repo map.
 - Remind the user: the canonical launch is `cd <wrapper> && <your-agent>`. Every repo is then reachable and `AGENTS.md` loads automatically.
 - If the script printed a plugin-config warning, surface it prominently. That's the user's manual step.
-- If they later add a fork or another clone under the wrapper, point them at `/greenroom-sync` to wire it into the workspace.
+- If they later add a fork or another clone under the wrapper, point them at `/greenroom:sync` to wire it into the workspace.
 
 ## Relaying the repo-creation offer
 
@@ -36,4 +39,4 @@ If the script printed a "To create private GitHub repos for these (optional):" b
 
 If the user ran it without arguments, show the script's `--help` for `new` and stop.
 
-Reference: full conventions and edge cases live in `"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/SKILL.md"`.
+Reference: full conventions and edge cases live in `SKILL.md`, next to the script (same directory `$P` resolves to above).

@@ -46,6 +46,8 @@ cd greenroom
 
 `install.sh` symlinks the skill into `~/.claude/skills/greenroom` and the slash commands into `~/.claude/commands/`. It's idempotent and never clobbers a real file you own.
 
+A manual install registers the commands without the plugin namespace, so the examples below that read `/greenroom:new`, `/greenroom:add`, and `/greenroom:sync` are invoked as `/new`, `/add`, and `/sync`. The plugin install is the recommended path and gives you the namespaced form.
+
 ## Quick start
 
 Two commands cover the common cases.
@@ -53,8 +55,8 @@ Two commands cover the common cases.
 **Add a green room to a repo you already have:**
 
 ```
-cd <your-repo> && /greenroom-add        # operates on the current directory
-/greenroom-add <path-to-repo>           # or point it at a path
+cd <your-repo> && /greenroom:add        # operates on the current directory
+/greenroom:add <path-to-repo>           # or point it at a path
 ```
 
 The most common case is running it from inside a repo you've already cloned, so the path is optional and defaults to the current directory. It moves the existing repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` next to it. Git history and the origin remote come along untouched. It works whether or not the parent holds other repos.
@@ -62,9 +64,9 @@ The most common case is running it from inside a repo you've already cloned, so 
 **Start a fresh project:**
 
 ```
-/greenroom-new <name> --clone <git-url>     # clone an existing public repo into it
-/greenroom-new <name> --init-public         # start an empty public repo
-/greenroom-new <name>                        # leave the public side for later
+/greenroom:new <name> --clone <git-url>     # clone an existing public repo into it
+/greenroom:new <name> --init-public         # start an empty public repo
+/greenroom:new <name>                        # leave the public side for later
 ```
 
 Add `--with-private-fork` to either command and the script also scaffolds a `<name>-private-fork/` alongside: a private dev checkout cloned from the local `-public` repo, with its remote named `upstream` so `origin` stays free for a private GitHub repo. The full three-repo shape is `<name>-public` (the stage), `<name>-private-fork` (private dev), and `<name>-private` (the green room). Both commands run the same script (`scripts/greenroom.py`, subcommands `retrofit` and `new`) and accept `--public-name` / `--private-name` overrides when the defaults don't fit.
@@ -72,7 +74,7 @@ Add `--with-private-fork` to either command and the script also scaffolds a `<na
 **Add more repos to a project later**, like a fork to PR from or another clone:
 
 ```
-/greenroom-sync     # re-scans the wrapper, wires the new repo into the workspace
+/greenroom:sync     # re-scans the wrapper, wires the new repo into the workspace
 ```
 
 Drop the new repo directly under the wrapper, then run sync from inside any of the project's repos.

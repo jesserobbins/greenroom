@@ -5,10 +5,13 @@ argument-hint: [path-to-existing-public-repo] [--name <project>] [--with-private
 
 Run the greenroom script's `retrofit` subcommand with the user's arguments. The path is optional: with no path, it operates on the current directory, so a user already inside their repo can just run the command.
 
-The script ships with greenroom. Invoke it via Bash, using the form below so it resolves under both a plugin install (`$CLAUDE_PLUGIN_ROOT` is set) and a manual `install.sh` install (the `~/.claude/skills/greenroom` fallback):
+The script ships with greenroom. Resolve its path with the block below, then invoke it via Bash. The block tries the plugin env var, then the plugin cache (any owner/version), then the manual `install.sh` location -- so it works on a plugin install and a manual install alike:
 
-```
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/scripts/greenroom.py" retrofit $ARGUMENTS
+```bash
+P="${CLAUDE_PLUGIN_ROOT:-}"
+[ -z "$P" ] && P=$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/ 2>/dev/null | sort -V | tail -1)
+[ -z "$P" ] && P="$HOME/.claude/skills/greenroom"
+"$P/scripts/greenroom.py" retrofit $ARGUMENTS
 ```
 
 The script will:
@@ -31,7 +34,7 @@ Use this when the project needs a dedicated private dev checkout separate from t
 - If a plugin-config warning printed, surface it prominently and tell the user the exact substitution to make in the named files.
 - Remind the user about external follow-ups: updating IDE workspaces or shell aliases that hardcoded the old path.
 - If the public repo's history already holds design docs or notes, mention `greenroom.py collect` (run from inside `<project>-public/`) to recover them into the private dir.
-- If they later add a fork or another clone under the wrapper, point them at `/greenroom-sync` to wire it into the workspace.
+- If they later add a fork or another clone under the wrapper, point them at `/greenroom:sync` to wire it into the workspace.
 
 ## Relaying the repo-creation offer
 
@@ -45,4 +48,4 @@ If the script printed a "To create private GitHub repos for these (optional):" b
 
 Re-running is idempotent, but point at the `-public` dir on the second run (e.g. `~/src/<name>/<name>-public`): after the first run the wrapper is no longer a git repo, so the original path would be rejected.
 
-Reference: full conventions and edge cases live in `"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/SKILL.md"`.
+Reference: full conventions and edge cases live in `SKILL.md`, next to the script (same directory `$P` resolves to above).

@@ -34,7 +34,7 @@ A per-project layout: a parent folder per project holding two sibling git repos.
 └── <any-other-repo>/                # (optional) any git repo dropped under the wrapper
 ```
 
-The parent folder itself has no `.git/`: it's just an organizational container so that one `cd ~/src/<project>/` puts every part of the project in front of you. The wrapper holds **two fixed repos** (`-public`, `-private`) plus **any number of optional ones**: a `-public-fork` to PR from, a `-private-fork`, more clones. Every git repo directly under the wrapper is auto-discovered and added to the workspace; `/greenroom-sync` picks up new ones.
+The parent folder itself has no `.git/`: it's just an organizational container so that one `cd ~/src/<project>/` puts every part of the project in front of you. The wrapper holds **two fixed repos** (`-public`, `-private`) plus **any number of optional ones**: a `-public-fork` to PR from, a `-private-fork`, more clones. Every git repo directly under the wrapper is auto-discovered and added to the workspace; `/greenroom:sync` picks up new ones.
 
 ### Agent orientation: AGENTS.md
 
@@ -56,17 +56,17 @@ A VS Code multi-root workspace file (`<project>.code-workspace`) sits at the wra
 
 ## Slash commands
 
-- **`/greenroom-new <name> [--clone <url> | --init-public] [--parent <dir>]`**: create a new project from scratch. Optionally clone an existing public repo into it, init an empty public repo, or leave the public dir for the user to populate later.
-- **`/greenroom-add <path-to-existing-public-repo>`**: take an existing public repo (e.g. `~/src/foo/`) and add the greenroom layout around it. Moves the public repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` alongside.
-- **`/greenroom-sync [--wrapper <dir>] [--canonical <repo-dir>]`**: re-scan an existing wrapper and update the workspace, agent working-dir access, and repo map. Run it after dropping a new repo (a `-public-fork`, another clone) under the wrapper so it gets wired in. Detects the wrapper from cwd; works from inside any of the project's repos.
+- **`/greenroom:new <name> [--clone <url> | --init-public] [--parent <dir>]`**: create a new project from scratch. Optionally clone an existing public repo into it, init an empty public repo, or leave the public dir for the user to populate later.
+- **`/greenroom:add <path-to-existing-public-repo>`**: take an existing public repo (e.g. `~/src/foo/`) and add the greenroom layout around it. Moves the public repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` alongside.
+- **`/greenroom:sync [--wrapper <dir>] [--canonical <repo-dir>]`**: re-scan an existing wrapper and update the workspace, agent working-dir access, and repo map. Run it after dropping a new repo (a `-public-fork`, another clone) under the wrapper so it gets wired in. Detects the wrapper from cwd; works from inside any of the project's repos.
 
-`/greenroom-new` and `/greenroom-add` invoke the script's `new` and `retrofit` subcommands; both accept `--public-name` and `--private-name` overrides if the defaults don't fit, otherwise the canonical names are derived from the project name. `/greenroom-sync` invokes the `sync` subcommand. All three regenerate the workspace + wiring (see "VS Code workspace" below).
+`/greenroom:new` and `/greenroom:add` invoke the script's `new` and `retrofit` subcommands; both accept `--public-name` and `--private-name` overrides if the defaults don't fit, otherwise the canonical names are derived from the project name. `/greenroom:sync` invokes the `sync` subcommand. All three regenerate the workspace + wiring (see "VS Code workspace" below).
 
 The command definitions are vendored in `commands/` and symlinked into `~/.claude/commands/` by the repo's `install.sh`, so they stay versioned alongside the skill rather than drifting as loose user-config files.
 
 ### `--with-private-fork`
 
-Both `/greenroom-new` and `/greenroom-add` accept `--with-private-fork`. Pass it to also scaffold a `<project>-private-fork/` sibling. The script clones the local `<project>-public` repo into it using `git clone -o upstream`, so the remote is named `upstream`, not `origin`. This leaves `origin` free for a private GitHub remote. The fork is auto-discovered as a workspace root and granted sibling access by the next `sync`.
+Both `/greenroom:new` and `/greenroom:add` accept `--with-private-fork`. Pass it to also scaffold a `<project>-private-fork/` sibling. The script clones the local `<project>-public` repo into it using `git clone -o upstream`, so the remote is named `upstream`, not `origin`. This leaves `origin` free for a private GitHub remote. The fork is auto-discovered as a workspace root and granted sibling access by the next `sync`.
 
 When this flag is used, the script prints `gh repo create --private` commands for the new private repos (including the fork). The agent relays these verbatim and runs them on your explicit yes. Nothing reaches GitHub without that confirmation.
 
@@ -99,11 +99,11 @@ After `--apply`, review `git -C <wrapper>/<project>-private status` and commit w
 
 | User situation | Command |
 |---|---|
-| Existing public repo at `~/src/<name>/`, want to add private notes | `/greenroom-add ~/src/<name>` |
-| Starting a new project, want to clone an existing public repo into it | `/greenroom-new <name> --clone <git-url>` |
-| Starting a new project, public repo doesn't exist yet | `/greenroom-new <name> --init-public` |
-| Already laid out, just want to (re-)create the private dir alongside an existing public dir | `/greenroom-add ~/src/<name>/<name>-public` (re-runs are idempotent: detect the existing layout, add only the missing private dir). Point at the `-public` dir, not the wrapper: after the first run the wrapper is no longer a git repo, so the original path would be rejected. |
-| Dropped a new repo (fork, extra clone) under an existing wrapper and want it wired into the workspace | `/greenroom-sync` from inside any of the project's repos |
+| Existing public repo at `~/src/<name>/`, want to add private notes | `/greenroom:add ~/src/<name>` |
+| Starting a new project, want to clone an existing public repo into it | `/greenroom:new <name> --clone <git-url>` |
+| Starting a new project, public repo doesn't exist yet | `/greenroom:new <name> --init-public` |
+| Already laid out, just want to (re-)create the private dir alongside an existing public dir | `/greenroom:add ~/src/<name>/<name>-public` (re-runs are idempotent: detect the existing layout, add only the missing private dir). Point at the `-public` dir, not the wrapper: after the first run the wrapper is no longer a git repo, so the original path would be rejected. |
+| Dropped a new repo (fork, extra clone) under an existing wrapper and want it wired into the workspace | `/greenroom:sync` from inside any of the project's repos |
 
 ## What the script does NOT do (and why)
 
