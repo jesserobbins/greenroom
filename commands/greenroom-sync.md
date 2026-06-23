@@ -5,10 +5,10 @@ argument-hint: [--wrapper <dir>] [--canonical <repo-dir>] [--name <project>]
 
 Run the greenroom script's `sync` subcommand with the user's arguments.
 
-The script lives at `~/.claude/skills/greenroom/scripts/greenroom.py`. Invoke it via Bash:
+The script ships with greenroom. Invoke it via Bash, using the form below so it resolves under both a plugin install (`$CLAUDE_PLUGIN_ROOT` is set) and a manual `install.sh` install (the `~/.claude/skills/greenroom` fallback):
 
 ```
-~/.claude/skills/greenroom/scripts/greenroom.py sync $ARGUMENTS
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/scripts/greenroom.py" sync $ARGUMENTS
 ```
 
 With no `--wrapper`, the script detects the wrapper by walking up from the current directory to the nearest non-git folder that contains git repos, so it works from inside any of the project's repos or from the wrapper itself.
@@ -26,4 +26,4 @@ After it runs:
 - Remind the user that the canonical way to launch is at the wrapper (`cd <wrapper> && <your-agent>`): every repo is then under cwd and each repo's `AGENTS.md` loads as the agent touches its files. The workspace's `Claude Code` task does the same from VS Code. If new folder roots were added, suggest re-opening the `<project>.code-workspace` (or reloading the window) to pick them up.
 - If the wrong repo was chosen as canonical, re-run with `--canonical <repo-dir>`.
 
-Reference: full conventions and edge cases live in `~/.claude/skills/greenroom/SKILL.md`.
+Reference: full conventions and edge cases live in `"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/SKILL.md"`.

@@ -5,10 +5,10 @@ argument-hint: [path-to-existing-public-repo] [--name <project>] [--with-private
 
 Run the greenroom script's `retrofit` subcommand with the user's arguments. The path is optional: with no path, it operates on the current directory, so a user already inside their repo can just run the command.
 
-The script lives at `~/.claude/skills/greenroom/scripts/greenroom.py`. Invoke it via Bash:
+The script ships with greenroom. Invoke it via Bash, using the form below so it resolves under both a plugin install (`$CLAUDE_PLUGIN_ROOT` is set) and a manual `install.sh` install (the `~/.claude/skills/greenroom` fallback):
 
 ```
-~/.claude/skills/greenroom/scripts/greenroom.py retrofit $ARGUMENTS
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/scripts/greenroom.py" retrofit $ARGUMENTS
 ```
 
 The script will:
@@ -45,4 +45,4 @@ If the script printed a "To create private GitHub repos for these (optional):" b
 
 Re-running is idempotent, but point at the `-public` dir on the second run (e.g. `~/src/<name>/<name>-public`): after the first run the wrapper is no longer a git repo, so the original path would be rejected.
 
-Reference: full conventions and edge cases live in `~/.claude/skills/greenroom/SKILL.md`.
+Reference: full conventions and edge cases live in `"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/SKILL.md"`.

@@ -5,10 +5,10 @@ argument-hint: <project-name> [--clone <git-url> | --init-public] [--with-privat
 
 Run the greenroom script's `new` subcommand with the user's arguments.
 
-The script lives at `~/.claude/skills/greenroom/scripts/greenroom.py`. Invoke it via Bash with `$ARGUMENTS` appended:
+The script ships with greenroom. Invoke it via Bash with `$ARGUMENTS` appended, using the form below so it resolves under both a plugin install (`$CLAUDE_PLUGIN_ROOT` is set) and a manual `install.sh` install (the `~/.claude/skills/greenroom` fallback):
 
 ```
-~/.claude/skills/greenroom/scripts/greenroom.py new $ARGUMENTS
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/scripts/greenroom.py" new $ARGUMENTS
 ```
 
 ## `--with-private-fork`
@@ -36,4 +36,4 @@ If the script printed a "To create private GitHub repos for these (optional):" b
 
 If the user ran it without arguments, show the script's `--help` for `new` and stop.
 
-Reference: full conventions and edge cases live in `~/.claude/skills/greenroom/SKILL.md`.
+Reference: full conventions and edge cases live in `"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/greenroom}/SKILL.md"`.

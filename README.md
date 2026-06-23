@@ -107,7 +107,7 @@ As a safety net for a stray launch *inside* one repo, the script also writes a g
 
 ## Recovering docs already in public history
 
-If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo:
+If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo. The script path below assumes a manual `install.sh` install; on a plugin install the script lives under `~/.claude/plugins/` instead, so prefer the `/greenroom-*` slash commands or substitute that path:
 
 ```
 cd <parent>/<project>-public
