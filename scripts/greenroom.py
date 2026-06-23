@@ -1269,7 +1269,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
             # produce distinct hashes; the hex directory can never equal a target
             # filename or be an ancestor of another target.  target_name (with its
             # date prefix, generic-basename parent prefix, etc.) is preserved inside.
-            shorthash = hashlib.sha1(path.encode()).hexdigest()[:8]
+            shorthash = hashlib.sha256(path.encode()).hexdigest()[:16]
             target = private / bucket / shorthash / target_name
         else:
             target = private / bucket / target_name

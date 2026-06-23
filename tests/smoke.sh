@@ -442,11 +442,11 @@ path_ab="$(find "$T/m5test/m5test-private" -type f -name 'foo-design.md' | sort)
 dir1="$(echo "$path_ab" | head -1 | xargs dirname)"
 dir2="$(echo "$path_ab" | tail -1 | xargs dirname)"
 [ "$dir1" != "$dir2" ] || fail "M5: both foo-design.md files share the same parent dir ($dir1); collision was not separated"
-# The hash dirs themselves must be 8-char hex strings (new strategy, not old nesting).
+# The hash dirs themselves must be 16-char hex strings (new strategy, not old nesting).
 hash1="$(basename "$dir1")"
 hash2="$(basename "$dir2")"
-echo "$hash1" | grep -qE '^[0-9a-f]{8}$' || fail "M5: hash dir '$hash1' is not 8-char hex (wrong collision strategy?)"
-echo "$hash2" | grep -qE '^[0-9a-f]{8}$' || fail "M5: hash dir '$hash2' is not 8-char hex (wrong collision strategy?)"
+echo "$hash1" | grep -qE '^[0-9a-f]{16}$' || fail "M5: hash dir '$hash1' is not 16-char hex (wrong collision strategy?)"
+echo "$hash2" | grep -qE '^[0-9a-f]{16}$' || fail "M5: hash dir '$hash2' is not 16-char hex (wrong collision strategy?)"
 [ "$hash1" != "$hash2" ] || fail "M5: both files got the same hash dir ($hash1); hashes must differ for distinct source paths"
 # Coexistence of two files with the same name proves no file/dir conflict (the ancestor assertion fired pre-apply).
 ok "M5: a-b/foo-design.md and a/b/foo-design.md both survive as distinct files under distinct hash dirs (collision boundary)"
@@ -553,8 +553,8 @@ ndir2="$(echo "$notes_files" | tail -1 | xargs dirname)"
 [ "$ndir1" != "$ndir2" ] || fail "M8: both colliding notes share the same parent dir ($ndir1); collision was not separated"
 nhash1="$(basename "$ndir1")"
 nhash2="$(basename "$ndir2")"
-echo "$nhash1" | grep -qE '^[0-9a-f]{8}$' || fail "M8: hash dir '$nhash1' is not 8-char hex"
-echo "$nhash2" | grep -qE '^[0-9a-f]{8}$' || fail "M8: hash dir '$nhash2' is not 8-char hex"
+echo "$nhash1" | grep -qE '^[0-9a-f]{16}$' || fail "M8: hash dir '$nhash1' is not 16-char hex"
+echo "$nhash2" | grep -qE '^[0-9a-f]{16}$' || fail "M8: hash dir '$nhash2' is not 16-char hex"
 [ "$nhash1" != "$nhash2" ] || fail "M8: both colliding notes got the same hash dir ($nhash1); hashes must differ"
 ok "M8: colliding notes both land dated under distinct hash dirs (M8 boundary)"
 
