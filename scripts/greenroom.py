@@ -273,11 +273,21 @@ def _exclude_locally(repo: Path, pattern: str) -> None:
     """Add `pattern` to the repo's local .git/info/exclude (untracked ignore).
 
     Keeps a generated file out of `git status` without touching the tracked
-    .gitignore — so re-running never dirties the public repo's history.
+    .gitignore -- so re-running never dirties the public repo's history.
+
+    Uses `git rev-parse --git-path info/exclude` so it works for both normal
+    repos (.git/ is a dir) and linked worktrees (.git is a file pointing
+    elsewhere). If the directory is not a git repo at all, skips silently.
     """
-    if not (repo / ".git").is_dir():
-        return  # worktree/submodule .git-file, or not a repo — skip
-    exclude = repo / ".git" / "info" / "exclude"
+    r = subprocess.run(
+        ["git", "rev-parse", "--git-path", "info/exclude"],
+        cwd=repo, capture_output=True, text=True, check=False,
+    )
+    if r.returncode != 0:
+        return  # not a git repo -- skip
+    exclude = Path(r.stdout.strip())
+    if not exclude.is_absolute():
+        exclude = repo / exclude
     try:
         exclude.parent.mkdir(parents=True, exist_ok=True)
         lines = exclude.read_text().splitlines() if exclude.exists() else []
@@ -309,7 +319,10 @@ def write_claude_settings_local(canonical_dir: Path, siblings: list[str]) -> Opt
     if settings_path.exists():
         try:
             data = json.loads(settings_path.read_text())
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError:
+            warn(f"{settings_path} is malformed JSON; leaving it untouched")
+            return settings_path
+        except OSError:
             data = {}
     perms = data.setdefault("permissions", {})
     dirs = perms.setdefault("additionalDirectories", [])
@@ -333,6 +346,23 @@ def write_all_grants(wrapper: Path, repos: list[str]) -> list[Path]:
         p = write_claude_settings_local(wrapper / repo, siblings)
         if p:
             written.append(p)
+    return written
+
+
+def write_per_repo_claude_pointers(wrapper: Path, repos: list[str]) -> list[Path]:
+    """For each repo that has its own AGENTS.md, write a CLAUDE.md pointer if absent.
+
+    A repo launched standalone should find a CLAUDE.md that points Claude at
+    its own AGENTS.md. Write-if-absent: never clobbers a hand-edited CLAUDE.md.
+    Only writes where AGENTS.md already exists -- does not create AGENTS.md.
+    """
+    written: list[Path] = []
+    for repo in repos:
+        repo_dir = wrapper / repo
+        if not (repo_dir / "AGENTS.md").exists():
+            continue
+        path, _ = write_claude_pointer(repo_dir)
+        written.append(path)
     return written
 
 
@@ -429,12 +459,13 @@ def write_agents_md(
     return path, "created"
 
 
-def write_claude_pointer(wrapper: Path) -> tuple[Path, str]:
+def write_claude_pointer(target_dir: Path) -> tuple[Path, str]:
     """Claude adapter: write CLAUDE.md containing exactly '@AGENTS.md'.
 
     Write-if-absent: a hand-edited CLAUDE.md is left untouched.
+    Works for the wrapper root or any repo dir that has its own AGENTS.md.
     """
-    path = wrapper / "CLAUDE.md"
+    path = target_dir / "CLAUDE.md"
     if path.exists():
         return path, "exists"
     path.write_text("@AGENTS.md\n")
@@ -446,6 +477,10 @@ def write_gemini_settings(wrapper: Path) -> tuple[Path, str]:
 
     Merges gracefully if the file already exists (preserves other keys).
     Git-excluded locally like settings.local.json.
+
+    Note: .gemini/settings.json lives inside a git repo, so it needs
+    _exclude_locally. The <project>.code-workspace lives in the non-git
+    wrapper root, so it needs no exclude.
     """
     gemini_dir = wrapper / ".gemini"
     gemini_dir.mkdir(exist_ok=True)
@@ -455,7 +490,10 @@ def write_gemini_settings(wrapper: Path) -> tuple[Path, str]:
     if settings_path.exists():
         try:
             data = json.loads(settings_path.read_text())
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError:
+            warn(f"{settings_path} is malformed JSON; leaving it untouched")
+            return settings_path, "skipped (malformed)"
+        except OSError:
             data = {}
         status = "updated"
     context = data.setdefault("context", {})
@@ -861,9 +899,10 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
     canonical = choose_canonical(repos, known_public=public_dir_name)
     workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
+    write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
-    claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter
+    claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
 
     info("")
@@ -935,9 +974,10 @@ def cmd_new(args: argparse.Namespace) -> None:
     )
     workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
+    write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
-    claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter
+    claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
 
     info("")
@@ -988,9 +1028,10 @@ def cmd_sync(args: argparse.Namespace) -> None:
 
     workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
+    write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
-    claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter
+    claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
 
     info("")
@@ -1028,14 +1069,19 @@ def _classify(repo_relative_path: str) -> Optional[str]:
 
 
 def _default_branch(repo: Path) -> str:
-    """Best-effort: origin/HEAD target, then main, then master."""
-    r = run(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=repo, check=False)
-    if r.returncode == 0 and r.stdout.strip():
-        return r.stdout.strip()  # e.g. "origin/main"
+    """Best-effort default branch: local main/master first, then origin/HEAD.
+
+    Prefer local branches over origin/HEAD so we scan the locally-committed
+    tree rather than a potentially stale remote ref on an unfetched repo.
+    Falls back to origin/HEAD only when no local main or master exists.
+    """
     for candidate in ("main", "master"):
         r = run(["git", "rev-parse", "--verify", candidate], cwd=repo, check=False)
         if r.returncode == 0:
             return candidate
+    r = run(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=repo, check=False)
+    if r.returncode == 0 and r.stdout.strip():
+        return r.stdout.strip()  # e.g. "origin/main"
     die(f"could not determine default branch for {repo}")
     return ""  # unreachable
 
@@ -1151,22 +1197,52 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "design.md", "readme.md", "notes.md", "rfc.md", "architecture.md",
         "scratch.md", "draft.md", "review.md", "research.md", "spec.md",
     }
-    plan: list[tuple[str, str, Path, str, str, str]] = []  # (src_path, bucket, target, ref, sha, date)
+    import re as _re
+    # First pass: compute a candidate target_name for each source path.
+    # We detect basename collisions across different source paths and
+    # disambiguate by prepending the parent dir name.
+    _target_names: dict[str, str] = {}  # src_path -> target_name (before bucket subdir)
+    _src_by_name: dict[tuple[str, str], list[str]] = {}  # (bucket, target_name) -> [src_paths]
     for path, (ref, sha, date) in sorted(candidates.items()):
         bucket = _classify(path)
         if bucket is None:
-            # On a private-prefix branch but no path rule matched — default to design/.
-            # User reviews before --apply.
             bucket = "design"
         src = Path(path)
         target_name = src.name
         if target_name.lower() in generic and src.parent != Path("."):
             target_name = f"{src.parent.name}-{target_name}"
         if bucket == "notes":
-            # Date-prefix notes from the file's last-commit date, unless the
-            # filename already starts with any YYYY-MM-DD- prefix.
-            import re
-            if not re.match(r"^\d{4}-\d{2}-\d{2}-", target_name):
+            if not _re.match(r"^\d{4}-\d{2}-\d{2}-", target_name):
+                target_name = f"{date[:10]}-{target_name}"
+        _target_names[path] = target_name
+        key = (bucket, target_name.lower())
+        _src_by_name.setdefault(key, []).append(path)
+
+    # Detect collisions: if two distinct source paths map to the same
+    # (bucket, target_name), disambiguate by prefixing with the parent dir.
+    _disambiguated: set[tuple[str, str]] = set()
+    for (bucket, tname_lower), paths_for_name in _src_by_name.items():
+        if len(paths_for_name) > 1:
+            _disambiguated.add((bucket, tname_lower))
+
+    plan: list[tuple[str, str, Path, str, str, str]] = []  # (src_path, bucket, target, ref, sha, date)
+    for path, (ref, sha, date) in sorted(candidates.items()):
+        bucket = _classify(path)
+        if bucket is None:
+            # On a private-prefix branch but no path rule matched -- default to design/.
+            # User reviews before --apply.
+            bucket = "design"
+        src = Path(path)
+        target_name = _target_names[path]
+        # If this target_name collides with another source in the same bucket,
+        # prepend the full relative parent path (slashes replaced with dashes)
+        # to make the target unique. Print a note so the user sees it.
+        if (bucket, target_name.lower()) in _disambiguated:
+            if src.parent != Path("."):
+                prefix = str(src.parent).replace("/", "-").replace("\\", "-")
+                target_name = f"{prefix}-{src.name}"
+            # Re-apply date prefix for notes after disambiguation.
+            if bucket == "notes" and not _re.match(r"^\d{4}-\d{2}-\d{2}-", target_name):
                 target_name = f"{date[:10]}-{target_name}"
         target = private / bucket / target_name
         plan.append((path, bucket, target, ref, sha, date))
@@ -1178,10 +1254,16 @@ def cmd_collect(args: argparse.Namespace) -> None:
     info(f"branch prefixes: {', '.join(prefixes)}")
     info(f"candidates: {len(plan)}")
     info("")
-    for src, bucket, target, ref, sha, _ in plan:
+    # Collect disambiguated targets for the plan display note.
+    _orig_names = {p: _target_names[p] for p, _, _, _, _, _ in plan}
+    for src_path, bucket, target, ref, sha, _ in plan:
         rel_target = target.relative_to(private.parent) if target.is_relative_to(private.parent) else target
-        info(f"  [{bucket:<8}] {src}")
-        info(f"             → {rel_target}")
+        info(f"  [{bucket:<8}] {src_path}")
+        # Note when the filename was changed to avoid a collision.
+        orig = _orig_names.get(src_path)
+        if orig and target.name != orig:
+            info(f"             note: renamed {orig} -> {target.name} (path-collision disambiguation)")
+        info(f"             -> {rel_target}")
         info(f"             from {ref} @ {sha[:10]}")
 
     if not args.apply:
@@ -1190,6 +1272,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         return
 
     # Apply: extract file content at the chosen sha and write to target.
+    # Read blobs as bytes (binary-safe) so non-UTF-8 files are preserved intact.
     copied = 0
     skipped = 0
     for src, bucket, target, ref, sha, _ in plan:
@@ -1198,17 +1281,20 @@ def cmd_collect(args: argparse.Namespace) -> None:
             skipped += 1
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        r = run(["git", "show", f"{sha}:{src}"], cwd=public, check=False)
+        r = subprocess.run(
+            ["git", "show", f"{sha}:{src}"],
+            cwd=public, capture_output=True, check=False,
+        )
         if r.returncode != 0:
-            warn(f"could not extract {src}@{sha[:10]}: {r.stderr.strip()}")
+            warn(f"could not extract {src}@{sha[:10]}: {r.stderr.decode(errors='replace').strip()}")
             skipped += 1
             continue
-        target.write_text(r.stdout)
+        target.write_bytes(r.stdout)
         copied += 1
 
     info("")
     info(f"copied {copied} file(s) into {private}; skipped {skipped}.")
-    info("review with `git -C {private} status`, then commit when ready.".format(private=private))
+    info(f"review with `git -C {private} status`, then commit when ready.")
 
 
 def build_parser() -> argparse.ArgumentParser:

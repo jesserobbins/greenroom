@@ -55,12 +55,18 @@ mkrepo "$T/proj/proj-public"
   echo a > architecture.md
   echo b > notes.md
   echo c > rfc-001.md
+  # suffix-glob basename path: **/*-design.md matches root-level foo-design.md
+  echo d > foo-design.md
+  echo e > bar.draft.md
   git add -A && git commit -qm docs )
 out="$( cd "$T/proj/proj-public" && "$SCRIPT" collect )"
 echo "$out" | grep -q "architecture.md" || fail "collect missed root architecture.md"
 echo "$out" | grep -q "notes/.*notes.md" || fail "collect missed root notes.md"
 echo "$out" | grep -q "rfc-001.md" || fail "collect missed root rfc-001.md"
-ok "collect classifies repo-root files"
+# L4: suffix-glob basename matches for **/*-design.md and **/*.draft.md
+echo "$out" | grep -q "foo-design.md" || fail "collect missed root foo-design.md (suffix-glob **/*-design.md)"
+echo "$out" | grep -q "bar.draft.md" || fail "collect missed root bar.draft.md (suffix-glob **/*.draft.md)"
+ok "collect classifies repo-root files including suffix-glob basenames"
 
 # --- 3. failed in-place move restores the repo (regression: bug #3) ---
 mkdir -p "$T/solo"
@@ -356,5 +362,59 @@ if echo "$out13" | grep 'gh repo create' | grep -v '\-private' | grep -q 'forkpr
   fail "--with-private-fork: offer wrongly includes public repo"
 fi
 ok "--with-private-fork: offer printed for -private and -private-fork; public excluded"
+
+# --- 14. collect: apply copies a text file (L1 regression -- binary-safe apply) ---
+mkdir -p "$T/applytest/applytest-private"/{design,notes,drafts,reviews,research}
+mkrepo "$T/applytest/applytest-public"
+( cd "$T/applytest/applytest-public"
+  printf 'hello apply\n' > notes.md
+  git add -A && git commit -qm "add notes"
+)
+"$SCRIPT" collect --public "$T/applytest/applytest-public" \
+  --private "$T/applytest/applytest-private" --apply >/dev/null
+# notes.md gets date-prefixed; just check something landed in notes/
+[ -n "$(ls "$T/applytest/applytest-private/notes/")" ] || fail "collect --apply: notes/ is empty after apply"
+grep -rq 'hello apply' "$T/applytest/applytest-private/notes/" || fail "collect --apply: content not preserved in notes/"
+ok "collect --apply copies a text file with content intact (L1 binary-safe)"
+
+# --- 15. collect: path-collision disambiguation preserves both files (C4 regression) ---
+mkdir -p "$T/colltest/colltest-private"/{design,notes,drafts,reviews,research}
+mkrepo "$T/colltest/colltest-public"
+( cd "$T/colltest/colltest-public"
+  mkdir -p sub/a sub/b
+  printf 'from a\n' > sub/a/notes.md
+  printf 'from b\n' > sub/b/notes.md
+  git add -A && git commit -qm "two notes"
+)
+out_coll="$( "$SCRIPT" collect --public "$T/colltest/colltest-public" \
+  --private "$T/colltest/colltest-private" )"
+# Both source paths must appear in the plan
+echo "$out_coll" | grep -q "sub/a/notes.md" || fail "collect collision: sub/a/notes.md missing from plan"
+echo "$out_coll" | grep -q "sub/b/notes.md" || fail "collect collision: sub/b/notes.md missing from plan"
+# Both must map to distinct target names (disambiguation happened)
+"$SCRIPT" collect --public "$T/colltest/colltest-public" \
+  --private "$T/colltest/colltest-private" --apply >/dev/null
+notes_count="$(ls "$T/colltest/colltest-private/notes/" | wc -l | tr -d ' ')"
+[ "$notes_count" -ge 2 ] || fail "collect collision: only $notes_count file(s) in notes/ -- expected 2 (disambiguation failed)"
+ok "collect path-collision disambiguation preserves both files (C4)"
+
+# --- 16. _default_branch prefers local main over origin/HEAD (L3 regression) ---
+# Create a repo with local main and a misleading origin/HEAD pointing at a different name.
+mkdir -p "$T/branchtest"
+mkrepo "$T/branchtest/local-repo"
+( cd "$T/branchtest/local-repo"
+  # Simulate a stale origin/HEAD pointing at nonexistent 'develop'
+  git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop 2>/dev/null || true
+)
+db_out="$(SCRIPT="$SCRIPT" python3 - "$T/branchtest/local-repo" <<'PY'
+import importlib.util, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("pd", os.environ["SCRIPT"])
+pd = importlib.util.module_from_spec(spec); spec.loader.exec_module(pd)
+print(pd._default_branch(Path(sys.argv[1])))
+PY
+)"
+[ "$db_out" = "main" ] || fail "_default_branch: expected 'main', got '$db_out' (should prefer local over origin/HEAD)"
+ok "_default_branch prefers local main over stale origin/HEAD (L3)"
 
 echo "all $pass checks passed"
