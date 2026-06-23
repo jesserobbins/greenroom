@@ -951,6 +951,8 @@ def cmd_new(args: argparse.Namespace) -> None:
     wrapper = parent / project_name
     if wrapper.exists():
         die(f"{wrapper} already exists")
+    if not args.parent:
+        info(f"creating wrapper in the current directory: {wrapper}")
     wrapper.mkdir()
 
     public_path = wrapper / public_dir_name
