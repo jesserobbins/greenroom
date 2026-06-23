@@ -182,6 +182,35 @@ ok "wrapper CLAUDE.md is preserved on re-run (write-if-absent)"
 
 ok "sync wires workspace, access, and map for a multi-repo wrapper"
 
+# --- upgrade: a legacy em-dash window.title is refreshed; a custom one is kept ---
+python3 - "$ws" <<'PY'
+import json, sys
+w = json.load(open(sys.argv[1]))
+w["settings"]["window.title"] = "multi — ${activeFolderShort}${separator}${rootName}"
+json.dump(w, open(sys.argv[1], "w"), indent="\t")
+PY
+"$SCRIPT" sync --wrapper "$T/multi" >/dev/null
+python3 - "$ws" <<'PY' || exit 1
+import json, sys
+t = json.load(open(sys.argv[1]))["settings"]["window.title"]
+assert "—" not in t, f"legacy em-dash window.title was not refreshed: {t!r}"
+assert t == "multi: ${activeFolderShort}${separator}${rootName}", t
+PY
+# a user's custom title must survive
+python3 - "$ws" <<'PY'
+import json, sys
+w = json.load(open(sys.argv[1]))
+w["settings"]["window.title"] = "my custom title"
+json.dump(w, open(sys.argv[1], "w"), indent="\t")
+PY
+"$SCRIPT" sync --wrapper "$T/multi" >/dev/null
+python3 - "$ws" <<'PY' || exit 1
+import json, sys
+t = json.load(open(sys.argv[1]))["settings"]["window.title"]
+assert t == "my custom title", f"custom window.title was clobbered: {t!r}"
+PY
+ok "sync refreshes a legacy em-dash window.title but keeps a custom one"
+
 # --- 6. sync merge adds a new repo and preserves a hand-added setting (feature) ---
 python3 - "$ws" <<'PY'
 import json, sys

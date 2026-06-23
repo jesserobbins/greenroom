@@ -250,6 +250,11 @@ def write_code_workspace(
         added = [f["path"] for f in desired_folders if f["path"] not in have]
         folders.extend(f for f in desired_folders if f["path"] not in have)
         es = existing.setdefault("settings", {})
+        # Refresh a window.title we generated in an older form (it once used an
+        # em dash); leave a user's custom title alone.
+        legacy_title = f"{project_name} — ${{activeFolderShort}}${{separator}}${{rootName}}"
+        if es.get("window.title") == legacy_title:
+            es["window.title"] = settings["window.title"]
         for k, v in settings.items():
             es.setdefault(k, v)
         _merge_launcher(existing, task)  # refresh our launcher, keep the user's tasks
