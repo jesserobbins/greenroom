@@ -1,0 +1,23 @@
+{
+  "name": "greenroom",
+  "description": "Keep your private design docs, drafts, and review notes in a private repo right beside the public code — so you do high-quality work in the open without leaking your raw thinking. The public repo is the stage; the private repo is the green room.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jesse Robbins",
+    "email": "jesse.robbins@openaid.org"
+  },
+  "homepage": "https://github.com/jesserobbins/greenroom",
+  "repository": "https://github.com/jesserobbins/greenroom",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "skill",
+    "design-docs",
+    "private-notes",
+    "git",
+    "workflow",
+    "open-source",
+    "monorepo",
+    "vscode"
+  ]
+}

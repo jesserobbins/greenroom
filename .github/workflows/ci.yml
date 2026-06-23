@@ -1,0 +1,27 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show tool versions
+        run: |
+          python3 --version
+          git --version
+      - name: Set a git identity for the test harness
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "greenroom ci"
+      - name: Run smoke tests
+        run: bash tests/smoke.sh

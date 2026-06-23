@@ -1,0 +1,30 @@
+{
+  "name": "jesserobbins",
+  "description": "greenroom \u2014 a private notes repo beside your public code, set up in one command.",
+  "owner": {
+    "name": "Jesse Robbins",
+    "email": "jesse.robbins@openaid.org"
+  },
+  "plugins": [
+    {
+      "name": "greenroom",
+      "source": "./",
+      "description": "Keep your private design docs, drafts, and review notes in a private repo right beside the public code \u2014 so you do high-quality work in the open without leaking your raw thinking. The public repo is the stage; the private repo is the green room.",
+      "author": {
+        "name": "Jesse Robbins",
+        "email": "jesse.robbins@openaid.org"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/jesserobbins/greenroom",
+      "keywords": [
+        "claude-code",
+        "skill",
+        "design-docs",
+        "private-notes",
+        "git",
+        "workflow",
+        "open-source"
+      ]
+    }
+  ]
+}

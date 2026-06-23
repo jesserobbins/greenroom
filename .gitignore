@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editor / local
+.vscode/
+.idea/
+*.swp
+
+# Claude Code local settings (granted dirs for the wrapper layout; never published)
+.claude/settings.local.json
