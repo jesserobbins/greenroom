@@ -1,12 +1,12 @@
 # greenroom
 
-> greenroom is a skill that sets up and maintains a private space for working on docs, plans, and files until you decide what you want to share publicly.
+> greenroom is a skill that sets up and maintains private spaces for working on docs, plans, and files until you decide what you want to share publicly.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ## Why greenroom?
 
-Writing your plans, design docs, and thinking down generates rich context for both you and your agents. Checking that thinking into a *public* repo feels vulnerable and intimate, so most people don't. It ends up scattered across Notes apps, Slack DMs, and untracked scratch files, where it can't be versioned, searched, or handed to an agent.
+Writing your plans, design docs, and thinking down generates rich context for both you, your team, and your agents. Checking that thinking into a *public* repo feels vulnerable and intimate for some. For me, it feels like [stepping on to a stage to perform](https://jesserobbins.com/mentions/velocity-2012-changing-culture-force-awesome-oreilly/)... and I only want to do that when I am prepared and ready. In the theatre and conferences, the **[Green Room](https://en.wikipedia.org/wiki/Green_room)** is the private space where performers prepare to take the stage.
 
 greenroom keeps that work under git, in a **private** repo that sits right beside the public one. Two sibling repos under a single project folder: the polished code on one side (the stage), the raw thinking on the other (the green room). You do high-quality work in private, and the only thing that reaches the stage is the finished result.
 
@@ -116,13 +116,6 @@ cd <parent>/<project>-public
 
 It scans two sources: files on the default branch that match private-shaped path rules (`docs/design/**`, `**/architecture.md`, `**/rfc-*.md`, and the like), and files reachable from unmerged branches whose names start with `design/`, `notes/`, `drafts/`, or `private/`. It reads each file from git history and writes a copy into the private dir. Public history is never rewritten. Review the plan, then re-run with `--apply` and commit when you are ready.
 
-## What it does not do
-
-- **No push.** Both repos stay local until you push them, so you review before anything reaches GitHub.
-- **No commit.** The private repo's initial files are left staged for review.
-- **No automatic GitHub repo creation.** The script prints the `gh repo create --private` commands for any new private repos (including the private fork if you used `--with-private-fork`). Your agent relays these and runs them on your explicit yes. Nothing reaches GitHub without that confirmation.
-- **No edits to Claude Code plugin config.** If the public repo was registered as a plugin, the move breaks its path. The script detects this and names the files to fix, but it leaves agent config to you.
-
 ## Tests
 
 `tests/smoke.sh` builds throwaway repos in a temp dir and exercises the script's reliability-critical paths: retrofit when the parent already holds other repos, `collect` classification of files at the repo root, crash-safe restore when an in-place move fails, component-boundary matching in the plugin-config check, the full `sync` wiring (workspace, access, and map), the AGENTS.md core plus the Claude and Gemini adapters, and the `--with-private-fork` scaffold. A GitHub Actions workflow (`.github/workflows/ci.yml`) runs it on Linux and macOS once the repo is on GitHub.
@@ -139,4 +132,4 @@ greenroom was built using greenroom: this repo is the stage, and the drafts, des
 
 ## License
 
-[Apache 2.0](LICENSE) © Jesse Robbins
+[Apache 2.0](LICENSE) © [Jesse Robbins](https://jesserobbins.com)
