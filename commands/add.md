@@ -48,4 +48,4 @@ If the script printed a "To create private GitHub repos for these (optional):" b
 
 Re-running is idempotent, but point at the `-public` dir on the second run (e.g. `~/src/<name>/<name>-public`): after the first run the wrapper is no longer a git repo, so the original path would be rejected.
 
-Reference: full conventions and edge cases live in `$P/skills/setup/SKILL.md` (`$P` resolves to the greenroom root above).
+Reference: full conventions and edge cases live in the greenroom skill (`skills/setup/SKILL.md` in the repo; on a plugin install, `$P/skills/setup/SKILL.md`; on a manual install, `~/.claude/skills/greenroom-setup/SKILL.md`).

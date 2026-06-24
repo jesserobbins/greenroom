@@ -771,6 +771,17 @@ HOME="$gh_mig" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh 
 [ -e "$gh_mig/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "migration broke script resolution"
 ok "old greenroom root symlink is migrated to a manifest-free script-root dir"
 
+# --- 30c. an UNRELATED symlink the user placed at the script-root path is NOT removed
+#          (migration only touches a symlink that points at this repo) (iter-1 claude-code L) ---
+ug="$T/unrelhome"
+mkdir -p "$ug/.claude/skills" "$ug/somewhere-else"
+ln -s "$ug/somewhere-else" "$ug/.claude/skills/greenroom"        # user's own symlink, not ours
+HOME="$ug" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 && rc=0 || rc=$?
+[ -L "$ug/.claude/skills/greenroom" ] || fail "install.sh removed an unrelated user symlink at the script-root path"
+[ "$(cd "$(dirname "$ug/.claude/skills/greenroom")" && readlink "$ug/.claude/skills/greenroom")" = "$ug/somewhere-else" ] \
+  || fail "install.sh repointed an unrelated user symlink"
+ok "an unrelated user symlink at the script-root path is left untouched"
+
 # --- 31. install.sh never clobbers a real (non-symlink) file the user owns at a target path ---
 ch="$T/clobberhome"
 mkdir -p "$ch/.claude/skills"

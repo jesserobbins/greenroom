@@ -39,4 +39,4 @@ If the script printed a "To create private GitHub repos for these (optional):" b
 
 If the user ran it without arguments, show the script's `--help` for `new` and stop.
 
-Reference: full conventions and edge cases live in `$P/skills/setup/SKILL.md` (`$P` resolves to the greenroom root above).
+Reference: full conventions and edge cases live in the greenroom skill (`skills/setup/SKILL.md` in the repo; on a plugin install, `$P/skills/setup/SKILL.md`; on a manual install, `~/.claude/skills/greenroom-setup/SKILL.md`).

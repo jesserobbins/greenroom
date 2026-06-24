@@ -44,8 +44,17 @@ SCRIPT_ROOT="$SKILL_DEST/greenroom"
 # Migrate an older installer's layout: it symlinked this path straight at the
 # repo root, which exposes the plugin manifest (auto-loaded as greenroom@skills-dir).
 # Replace that symlink with a real directory so we link only scripts/ + templates/
-# into it. (Removing a symlink here never deletes the repo it points at.)
-[ -L "$SCRIPT_ROOT" ] && { rm "$SCRIPT_ROOT"; echo "migrated: replaced the old greenroom root symlink with a script-only dir"; }
+# into it. Only migrate a symlink that points at THIS repo (an old greenroom
+# installer's); an unrelated symlink a user placed at this path is left alone and
+# falls through to link_one's no-clobber SKIP. (Removing our own symlink here
+# never deletes the repo it points at.)
+if [ -L "$SCRIPT_ROOT" ]; then
+  link_dest="$(cd "$(dirname "$SCRIPT_ROOT")" && readlink "$SCRIPT_ROOT")"
+  case "$link_dest" in
+    "$REPO_DIR"|"$REPO_DIR"/) rm "$SCRIPT_ROOT"
+      echo "migrated: replaced the old greenroom root symlink with a script-only dir" ;;
+  esac
+fi
 mkdir -p "$SCRIPT_ROOT"
 link_one "$REPO_DIR/scripts" "$SCRIPT_ROOT/scripts" "greenroom scripts"
 link_one "$REPO_DIR/templates" "$SCRIPT_ROOT/templates" "greenroom templates"
