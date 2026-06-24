@@ -571,9 +571,14 @@ def migrate_claude_to_agents(
 # target, regardless of any signal they carry. $HOME is the headline case: a
 # stray *.code-workspace from another tool once made it classify as a wrapper,
 # and greenroom scaffolded ~/CLAUDE.md (loaded into nearly every session).
+# Standard top-level $HOME subdirs a user would never intend as a project root.
+# Best-effort named floor (the $HOME-itself, filesystem-root, and GREENROOM_ROOT
+# guards apply regardless of OS); covers the macOS user dirs plus the XDG dirs
+# that differ on Linux (Videos, Templates). Arbitrary locale-localized casings
+# are out of scope — set GREENROOM_ROOT for a tighter boundary.
 _FORBIDDEN_HOME_SUBDIRS = frozenset({
     "Documents", "Desktop", "Downloads", "Library",
-    "Music", "Pictures", "Movies", "Public",
+    "Music", "Pictures", "Movies", "Videos", "Templates", "Public",
     ".config", ".claude", ".local",
 })
 
