@@ -261,6 +261,7 @@ def write_code_workspace(
             es.setdefault(k, v)
         _merge_launcher(existing, task)  # refresh our launcher, keep the user's tasks
         existing.setdefault("extensions", extensions)
+        existing.setdefault("greenroom", {"wrapper": True})  # self-identify as a greenroom wrapper
         workspace_path.write_text(json.dumps(existing, indent="\t", ensure_ascii=False) + "\n")
         if added:
             info(f"  workspace: added folder(s) {', '.join(added)}")
@@ -271,6 +272,7 @@ def write_code_workspace(
         "settings": settings,
         "tasks": {"version": "2.0.0", "tasks": [task]},
         "extensions": extensions,
+        "greenroom": {"wrapper": True},  # self-identify as a greenroom wrapper
     }
     workspace_path.write_text(json.dumps(workspace, indent="\t", ensure_ascii=False) + "\n")
     return workspace_path
@@ -626,15 +628,17 @@ def _is_project_wrapper(d: Path) -> bool:
 
     Guard against matching a generic clone parent like `~/GitHub` (which would
     grant `..` over the whole home dir and scan every repo). A real wrapper is a
-    non-repo dir holding git repos *and* carrying a wrapper signal: an existing
-    `*.code-workspace`, or a `*-private` repo sibling.
+    non-repo dir holding git repos *and* carrying a wrapper signal: a
+    greenroom-authored `*.code-workspace`, or a `*-private` repo sibling.
     """
+    if _is_forbidden_root(d):
+        return False
     if is_git_repo(d):
         return False
     repos = discover_repos(d)
     if not repos:
         return False
-    if any(d.glob("*.code-workspace")):
+    if _has_greenroom_workspace(d):
         return True
     return any(r.endswith("-private") for r in repos)
 
