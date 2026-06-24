@@ -19,6 +19,12 @@ reaches a stable release.
   script-path fallback and the `collect` examples still find `greenroom.py`
   without exposing the plugin manifest (which Claude Code would otherwise
   auto-load as a `greenroom@skills-dir` plugin).
+- `install.sh` is safer around a path it does not own: if `~/.claude/skills/
+  greenroom` is an unrelated symlink or a real file, it skips the script-root
+  setup with a notice (rather than writing `scripts/`/`templates/` through the
+  symlink into your directory, or aborting the whole install) and still links
+  the skill and commands. The README's manual-install section now documents the
+  `greenroom-setup` skill link and the `greenroom/` script-root.
 
 ## [0.1.3-alpha] - 2026-06-24
 
