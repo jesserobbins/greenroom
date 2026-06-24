@@ -622,4 +622,48 @@ echo "$nhash2" | grep -qE '^[0-9a-f]{16}$' || fail "M8: hash dir '$nhash2' is no
 [ "$nhash1" != "$nhash2" ] || fail "M8: both colliding notes got the same hash dir ($nhash1); hashes must differ"
 ok "M8: colliding notes both land dated under distinct hash dirs (M8 boundary)"
 
+# --- 21. a stray non-greenroom .code-workspace must NOT qualify a dir as a wrapper (issue #4) ---
+mkdir -p "$T/strayws"
+mkrepo "$T/strayws/somerepo"
+echo '{"folders":[{"path":"."}]}' > "$T/strayws/chezmoi.code-workspace"   # not greenroom's
+( cd "$T/strayws/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "sync treated a stray-workspace dir as a wrapper"
+[ ! -f "$T/strayws/CLAUDE.md" ] || fail "sync scaffolded CLAUDE.md into a stray-workspace dir"
+[ ! -f "$T/strayws/AGENTS.md" ] || fail "sync scaffolded AGENTS.md into a stray-workspace dir"
+ok "stray non-greenroom .code-workspace does not qualify a wrapper"
+
+# --- 22. explicit --wrapper at a forbidden root is refused, nothing written (issue #4) ---
+fake_home="$T/fakehome"
+mkdir -p "$fake_home"
+mkrepo "$fake_home/proj"
+HOME="$fake_home" "$SCRIPT" sync --wrapper "$fake_home" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "sync --wrapper \$HOME was not refused"
+[ ! -f "$fake_home/CLAUDE.md" ] || fail "sync wrote CLAUDE.md into \$HOME"
+[ ! -f "$fake_home/AGENTS.md" ] || fail "sync wrote AGENTS.md into \$HOME"
+ok "explicit --wrapper at \$HOME is refused and writes nothing"
+
+# --- 23. a greenroom sentinel workspace DOES qualify; sentinel-only wrapper re-syncs cleanly ---
+mkdir -p "$T/realwrap"
+mkrepo "$T/realwrap/realwrap-public"
+mkrepo "$T/realwrap/realwrap-private"
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null
+grep -q '"greenroom"' "$T/realwrap"/*.code-workspace || fail "sync did not stamp the greenroom sentinel"
+# drop the -private sibling: the sentinel alone must keep it a wrapper on re-sync
+rm -rf "$T/realwrap/realwrap-private"
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "sentinel-only wrapper no longer recognized on re-sync"
+ok "greenroom sentinel workspace qualifies a wrapper on its own"
+
+# --- 24. GREENROOM_ROOT boundary: a wrapper above the boundary is refused ---
+mkdir -p "$T/below/proj"
+mkrepo "$T/below/proj/proj-public"
+mkrepo "$T/below/proj/proj-private"
+# boundary at $T/below: the wrapper $T/below/proj is below it -> allowed
+GREENROOM_ROOT="$T/below" sh -c "cd '$T/below/proj/proj-public' && '$SCRIPT' sync" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "GREENROOM_ROOT wrongly refused a wrapper below the boundary"
+# boundary at $T/below/proj: $T/below/proj IS the boundary -> refused as a wrapper target
+GREENROOM_ROOT="$T/below/proj" "$SCRIPT" sync --wrapper "$T/below/proj" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "GREENROOM_ROOT did not refuse its own dir as a wrapper"
+ok "GREENROOM_ROOT refuses its own dir and any ancestor as a wrapper"
+
 echo "all $pass checks passed"
