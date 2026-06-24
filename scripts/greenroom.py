@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -562,6 +563,62 @@ def migrate_claude_to_agents(
     claude_path.write_text("@AGENTS.md\n")
     info(f"  migrated: CLAUDE.md → AGENTS.md + pointer ({wrapper})")
     return agents_path, "migrated"
+
+
+# Dirs greenroom must never treat as a wrapper, wrapper-parent, or scaffold
+# target, regardless of any signal they carry. $HOME is the headline case: a
+# stray *.code-workspace from another tool once made it classify as a wrapper,
+# and greenroom scaffolded ~/CLAUDE.md (loaded into nearly every session).
+_FORBIDDEN_HOME_SUBDIRS = frozenset({
+    "Documents", "Desktop", "Downloads", "Library",
+    "Music", "Pictures", "Movies", "Public",
+    ".config", ".claude", ".local",
+})
+
+
+def _greenroom_root() -> Optional[Path]:
+    """The GREENROOM_ROOT boundary, resolved, or None if unset/blank."""
+    raw = os.environ.get("GREENROOM_ROOT", "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
+def _is_forbidden_root(d: Path) -> bool:
+    """True if `d` must never be a wrapper / wrapper-parent / scaffold target.
+
+    Categorical: no contained repo or stray workspace file can override this.
+    Covers $HOME, the filesystem root, standard $HOME subdirs and dotfile
+    config roots, and (when set) GREENROOM_ROOT itself plus any ancestor of it.
+    """
+    d = d.resolve()
+    home = Path.home().resolve()
+    if d == home:
+        return True
+    if d.parent == d:  # filesystem root
+        return True
+    if d.parent == home and d.name in _FORBIDDEN_HOME_SUBDIRS:
+        return True
+    gr = _greenroom_root()
+    if gr is not None and (d == gr or d in gr.parents):
+        return True
+    return False
+
+
+def _has_greenroom_workspace(d: Path) -> bool:
+    """True if `d` holds a *.code-workspace carrying greenroom's sentinel.
+
+    A bare workspace from another tool (chezmoi, a hand-rolled multi-root) must
+    NOT qualify d as a greenroom wrapper; only one greenroom itself wrote does.
+    """
+    for ws in d.glob("*.code-workspace"):
+        try:
+            data = json.loads(ws.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, dict) and isinstance(data.get("greenroom"), dict):
+            return True
+    return False
 
 
 def _is_project_wrapper(d: Path) -> bool:
