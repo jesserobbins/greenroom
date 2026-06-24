@@ -55,9 +55,18 @@ if [ -L "$SCRIPT_ROOT" ]; then
       echo "migrated: replaced the old greenroom root symlink with a script-only dir" ;;
   esac
 fi
-mkdir -p "$SCRIPT_ROOT"
-link_one "$REPO_DIR/scripts" "$SCRIPT_ROOT/scripts" "greenroom scripts"
-link_one "$REPO_DIR/templates" "$SCRIPT_ROOT/templates" "greenroom templates"
+# After migration, $SCRIPT_ROOT is either gone (we removed ours / it never
+# existed) or still a symlink the user owns (points elsewhere). Never mkdir -p
+# or link through a surviving symlink: that follows it and writes scripts/ +
+# templates/ INTO the user's target directory. Skip and warn instead; script
+# resolution falls back to the plugin-cache tier, and the user keeps their dir.
+if [ -L "$SCRIPT_ROOT" ]; then
+  echo "SKIP script-root: $SCRIPT_ROOT is an unrelated symlink (leaving it and its target untouched); script resolution will use the plugin cache if present"
+else
+  mkdir -p "$SCRIPT_ROOT"
+  link_one "$REPO_DIR/scripts" "$SCRIPT_ROOT/scripts" "greenroom scripts"
+  link_one "$REPO_DIR/templates" "$SCRIPT_ROOT/templates" "greenroom templates"
+fi
 
 # Link each skill under a greenroom- prefix so a manual install gets a
 # namespaced /greenroom-<name> instead of a generic /<name> that could collide

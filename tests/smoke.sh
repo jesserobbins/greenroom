@@ -720,7 +720,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 grep -q '^name: setup$' "$REPO_ROOT/skills/setup/SKILL.md" || fail "skills/setup/SKILL.md frontmatter name is not 'setup'"
 ok "skill lives at skills/setup/ with name: setup and no root SKILL.md"
 
-# --- 26. manual install: namespaced skill name + script resolves at the tier-3 path (issue #3) ---
+# --- 29. manual install: namespaced skill name + script resolves at the tier-3 path (issue #3) ---
 mh="$T/manualhome"
 mkdir -p "$mh"
 HOME="$mh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh failed"
@@ -730,7 +730,7 @@ HOME="$mh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh fail
 [ -f "$mh/.claude/skills/greenroom-setup/SKILL.md" ] || fail "the namespaced skill link does not expose a SKILL.md"
 ok "manual install gives /greenroom-setup and resolves the script at the tier-3 path"
 
-# --- 27. the script-root is a plain dir of targeted symlinks, NOT the repo root.
+# --- 30. the script-root is a plain dir of targeted symlinks, NOT the repo root.
 #         Symlinking the whole root would expose .claude-plugin/plugin.json and the
 #         nested skills/, which Claude Code auto-loads as a `greenroom@skills-dir`
 #         plugin (the /greenroom:setup stutter, via a path we did not intend). ---
@@ -742,7 +742,7 @@ ok "manual install gives /greenroom-setup and resolves the script at the tier-3 
 [ -e "$mh/.claude/skills/greenroom/templates/private_AGENTS.md" ] || fail "script-root does not expose templates/ (greenroom.py reads them at runtime)"
 ok "script-root exposes only scripts/ and templates/, no manifest or nested skill"
 
-# --- 28. the script resolves templates correctly through the symlinked tier-3 path ---
+# --- 31. the script resolves templates correctly through the symlinked tier-3 path ---
 HOME="$mh" python3 - "$mh" >/dev/null <<'PY' || fail "greenroom.py cannot resolve its templates via the tier-3 path"
 import sys
 from pathlib import Path
@@ -752,14 +752,14 @@ assert (SKILL_DIR / "templates" / "private_AGENTS.md").exists(), "templates unre
 PY
 ok "greenroom.py resolves its templates through the tier-3 symlink"
 
-# --- 29. manual install is idempotent: a second run links nothing new and errors nothing ---
+# --- 32. manual install is idempotent: a second run links nothing new and errors nothing ---
 out2="$(HOME="$mh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "second install.sh run errored"
 echo "$out2" | grep -q "SKIP" && fail "second install.sh run hit an unexpected SKIP: $out2"
 [ -L "$mh/.claude/skills/greenroom-setup" ] || fail "idempotent run dropped the greenroom-setup link"
 [ -e "$mh/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "idempotent run dropped script resolution"
 ok "manual install is idempotent (re-run is clean, links stable)"
 
-# --- 30b. migration: an older installer's greenroom->repo-root symlink is replaced
+# --- 33. migration: an older installer's greenroom->repo-root symlink is replaced
 #          by a script-only dir, so the plugin manifest is no longer exposed (issue #3) ---
 gh_mig="$T/mighome"
 mkdir -p "$gh_mig/.claude/skills"
@@ -771,18 +771,22 @@ HOME="$gh_mig" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh 
 [ -e "$gh_mig/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "migration broke script resolution"
 ok "old greenroom root symlink is migrated to a manifest-free script-root dir"
 
-# --- 30c. an UNRELATED symlink the user placed at the script-root path is NOT removed
-#          (migration only touches a symlink that points at this repo) (iter-1 claude-code L) ---
+# --- 34. an UNRELATED symlink the user placed at the script-root path is NOT removed,
+#          repointed, OR written through (migration only touches a symlink that points
+#          at this repo; an unrelated one is skipped, not followed) (iter-2 codex L / pi M) ---
 ug="$T/unrelhome"
 mkdir -p "$ug/.claude/skills" "$ug/somewhere-else"
 ln -s "$ug/somewhere-else" "$ug/.claude/skills/greenroom"        # user's own symlink, not ours
 HOME="$ug" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "install.sh errored on an unrelated user symlink (rc=$rc)"
 [ -L "$ug/.claude/skills/greenroom" ] || fail "install.sh removed an unrelated user symlink at the script-root path"
 [ "$(cd "$(dirname "$ug/.claude/skills/greenroom")" && readlink "$ug/.claude/skills/greenroom")" = "$ug/somewhere-else" ] \
   || fail "install.sh repointed an unrelated user symlink"
-ok "an unrelated user symlink at the script-root path is left untouched"
+[ ! -e "$ug/somewhere-else/scripts" ] || fail "install.sh wrote scripts/ THROUGH the unrelated symlink into the user's dir"
+[ ! -e "$ug/somewhere-else/templates" ] || fail "install.sh wrote templates/ THROUGH the unrelated symlink into the user's dir"
+ok "an unrelated user symlink at the script-root path is left untouched and not written through"
 
-# --- 31. install.sh never clobbers a real (non-symlink) file the user owns at a target path ---
+# --- 35. install.sh never clobbers a real (non-symlink) file the user owns at a target path ---
 ch="$T/clobberhome"
 mkdir -p "$ch/.claude/skills"
 echo "do not touch" > "$ch/.claude/skills/greenroom-setup"        # a real file, not our symlink
