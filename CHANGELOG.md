@@ -14,6 +14,12 @@ reaches a stable release.
   unrelated workspace file could previously make greenroom scaffold
   `~/CLAUDE.md` and other wrapper files into the home directory, where
   `CLAUDE.md` is loaded into nearly every session. ([#4])
+- `retrofit` now refuses when the resolved wrapper is a forbidden root. It
+  previously checked only the parent, so retrofitting an already-wrapped repo
+  whose wrapper *is* the boundary (`$HOME` or `GREENROOM_ROOT`) could still
+  scaffold into it; the final target now clears the same guard `sync` uses.
+- Wrapper detection reads `.code-workspace` files as UTF-8 (matching the write
+  side) and skips an undecodable file instead of crashing classification.
 
 ### Added
 - A `.code-workspace` now only marks a directory as a greenroom wrapper if it
@@ -28,6 +34,9 @@ reaches a stable release.
   `sync` still refuses to treat the boundary itself as a wrapper.
 - greenroom now states its supported platforms (macOS and Linux; Windows via
   WSL2) and refuses to run on native Windows.
+- The forbidden-root floor of standard `$HOME` subdirectories now includes the
+  XDG dirs that differ on Linux (`Videos`, `Templates`) alongside the macOS
+  ones, for parity across both supported platforms.
 
 ## [0.1.2-alpha] - 2026-06-23
 
