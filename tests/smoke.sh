@@ -680,6 +680,15 @@ GREENROOM_ROOT="$T/grroot" "$SCRIPT" retrofit "$T/grroot/leaf" >/dev/null 2>&1 &
 # but the boundary itself is still refused as a scaffold TARGET, and an ancestor as a parent
 GREENROOM_ROOT="$T/grroot" "$SCRIPT" new x --parent "$T" >/dev/null 2>&1 && rc=0 || rc=$?
 [ "$rc" -ne 0 ] || fail "new --parent above the boundary was allowed (should be refused)"
+# retrofit of an ALREADY-WRAPPED repo whose wrapper IS the boundary must be refused
+# (wrapper == parent == GREENROOM_ROOT; the final target must clear _is_forbidden_root,
+# not just _is_forbidden_parent) (iter-4 codex M, greenroom.py:913)
+mkdir -p "$T/atroot"
+mkrepo "$T/atroot/atroot-public"                                  # makes $T/atroot look already-wrapped
+mkdir -p "$T/atroot/atroot-private"                               # -private sibling => _looks_like_wrapper
+GREENROOM_ROOT="$T/atroot" "$SCRIPT" retrofit "$T/atroot/atroot-public" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "retrofit into a wrapper that IS \$GREENROOM_ROOT was allowed (should be refused)"
+[ ! -f "$T/atroot/atroot.code-workspace" ] || fail "retrofit scaffolded into the boundary despite refusal"
 # and a project created under the boundary can still be synced afterward (not stranded by the walk-stop)
 GREENROOM_ROOT="$T/grroot" sh -c "cd '$T/grroot/leaf/leaf-public' && '$SCRIPT' sync" >/dev/null 2>&1 && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || fail "a wrapper created under \$GREENROOM_ROOT could not be synced afterward"

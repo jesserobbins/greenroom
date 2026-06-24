@@ -988,6 +988,15 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
             die(f"target {public_path} already exists")
         src.rename(public_path)
 
+    # The parent passed _is_forbidden_parent (which permits GREENROOM_ROOT as a
+    # parent), but the resolved wrapper is the actual scaffold target — it must
+    # clear the stricter _is_forbidden_root. Without this, retrofitting an
+    # already-wrapped repo whose wrapper IS the boundary (wrapper == parent ==
+    # GREENROOM_ROOT) would scaffold into the boundary that sync refuses.
+    if _is_forbidden_root(wrapper):
+        die(f"refusing to scaffold into {wrapper}: it is $HOME, the filesystem "
+            "root, a standard system directory, or GREENROOM_ROOT")
+
     # Prefer the canonical <project>-private/, but if a legacy `private/`
     # already exists alongside, leave it where it is (don't auto-rename).
     existing_private = _find_existing_private(wrapper, project_name, public_path)
