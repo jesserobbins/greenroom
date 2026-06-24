@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Symlink this skill into ~/.claude/skills/greenroom and its commands/*.md into
-# ~/.claude/commands/, so Claude Code loads the skill and the /greenroom-* slash
-# commands. Idempotent — safe to re-run. Run after cloning the repo.
+# Symlink each skill under skills/*/ into ~/.claude/skills/greenroom-<name> and
+# the commands/*.md into ~/.claude/commands/, so Claude Code loads the skills and
+# slash commands. Also exposes the repo root at ~/.claude/skills/greenroom so the
+# commands' script-path fallback (and the README/SKILL collect examples) resolve
+# greenroom.py on a manual install. Idempotent: safe to re-run after cloning.
 #
 # (If you instead install greenroom as a Claude Code plugin via the marketplace
-#  — `/plugin marketplace add jesserobbins/greenroom` then `/plugin install
-#  greenroom@jesserobbins` — you do NOT need this script; the plugin system wires
+#  (`/plugin marketplace add jesserobbins/greenroom` then `/plugin install
+#  greenroom@jesserobbins`), you do NOT need this script; the plugin system wires
 #  everything for you. This is the manual path for a direct `git clone`.)
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_NAME="greenroom"
 SKILL_DEST="$HOME/.claude/skills"
 CMD_DEST="$HOME/.claude/commands"
 mkdir -p "$SKILL_DEST" "$CMD_DEST"
 
-# link <target> <link-path> <label> — refresh our own symlinks, never clobber a
+# link <target> <link-path> <label>: refresh our own symlinks, never clobber a
 # real file the user owns. Sets `link_result` to "linked" or "skip".
 link_one() {
   local target="$1" link="$2" label="$3"
@@ -31,9 +32,58 @@ link_one() {
   link_result="linked"
 }
 
-[ -f "$REPO_DIR/SKILL.md" ] || { echo "error: SKILL.md not found in $REPO_DIR" >&2; exit 1; }
+# Expose the script (and its templates) at the commands' tier-3 fallback path
+# ($HOME/.claude/skills/greenroom/scripts/greenroom.py) and the README/SKILL
+# collect examples. This is a plain directory holding two symlinks, NOT a copy
+# of the repo root: symlinking the whole root would drag in .claude-plugin/
+# plugin.json and the nested skills/, which Claude Code would auto-load as a
+# `greenroom@skills-dir` plugin (reintroducing the /greenroom:setup stutter).
+# Exposing only scripts/ and templates/ keeps script resolution working with no
+# manifest and no nested skill in scope.
+SCRIPT_ROOT="$SKILL_DEST/greenroom"
+# Migrate an older installer's layout: it symlinked this path straight at the
+# repo root, which exposes the plugin manifest (auto-loaded as greenroom@skills-dir).
+# Replace that symlink with a real directory so we link only scripts/ + templates/
+# into it. Only migrate a symlink that points at THIS repo (an old greenroom
+# installer's); an unrelated symlink a user placed at this path is left alone and
+# falls through to link_one's no-clobber SKIP. (Removing our own symlink here
+# never deletes the repo it points at.)
+if [ -L "$SCRIPT_ROOT" ]; then
+  link_dest="$(cd "$(dirname "$SCRIPT_ROOT")" && readlink "$SCRIPT_ROOT")"
+  case "$link_dest" in
+    "$REPO_DIR"|"$REPO_DIR"/) rm "$SCRIPT_ROOT"
+      echo "migrated: replaced the old greenroom root symlink with a script-only dir" ;;
+  esac
+fi
+# After migration, $SCRIPT_ROOT is either gone (we removed ours / it never
+# existed) or still a symlink the user owns (points elsewhere). Never mkdir -p
+# or link through a surviving symlink: that follows it and writes scripts/ +
+# templates/ INTO the user's target directory. Skip and warn instead; script
+# resolution falls back to the plugin-cache tier, and the user keeps their dir.
+if [ -L "$SCRIPT_ROOT" ]; then
+  echo "SKIP script-root: $SCRIPT_ROOT is an unrelated symlink (leaving it and its target untouched); script resolution will use the plugin cache if present"
+elif [ -e "$SCRIPT_ROOT" ] && [ ! -d "$SCRIPT_ROOT" ]; then
+  # A real (non-dir, non-symlink) file the user owns. mkdir -p would fail and,
+  # under set -e, abort the whole install. Skip it like every other target and
+  # let the skill/command links still go in.
+  echo "SKIP script-root: $SCRIPT_ROOT exists and is not a directory (leaving it untouched); script resolution will use the plugin cache if present"
+else
+  mkdir -p "$SCRIPT_ROOT"
+  link_one "$REPO_DIR/scripts" "$SCRIPT_ROOT/scripts" "greenroom scripts"
+  link_one "$REPO_DIR/templates" "$SCRIPT_ROOT/templates" "greenroom templates"
+fi
 
-link_one "$REPO_DIR" "$SKILL_DEST/$SKILL_NAME" "skill $SKILL_NAME"
+# Link each skill under a greenroom- prefix so a manual install gets a
+# namespaced /greenroom-<name> instead of a generic /<name> that could collide
+# with the user's own skills. (A plugin install gives /greenroom:<name>.)
+skill_linked=0
+for skill_dir in "$REPO_DIR"/skills/*/; do
+  [ -f "$skill_dir/SKILL.md" ] || continue          # only dirs that hold a skill
+  sname="$(basename "$skill_dir")"
+  link_result=""
+  link_one "${skill_dir%/}" "$SKILL_DEST/greenroom-$sname" "skill greenroom-$sname"
+  [ "$link_result" = "linked" ] && skill_linked=$((skill_linked + 1))
+done
 
 cmd_linked=0
 for cmd in "$REPO_DIR"/commands/*.md; do
@@ -44,4 +94,4 @@ for cmd in "$REPO_DIR"/commands/*.md; do
   [ "$link_result" = "linked" ] && cmd_linked=$((cmd_linked + 1))
 done
 
-echo "Done. Skill '$SKILL_NAME' → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
+echo "Done. $skill_linked skill(s) → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"

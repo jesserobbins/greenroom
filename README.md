@@ -46,7 +46,7 @@ cd greenroom
 ./install.sh
 ```
 
-`install.sh` symlinks the skill into `~/.claude/skills/greenroom` and the slash commands into `~/.claude/commands/`. It's idempotent and never clobbers a real file you own.
+`install.sh` symlinks the skill into `~/.claude/skills/greenroom-setup` (namespaced so it invokes as `/greenroom-setup`, not a generic `/setup`) and the slash commands into `~/.claude/commands/`. It also creates `~/.claude/skills/greenroom/` as a plain directory holding `scripts/` and `templates/` symlinks, so the commands' script-path fallback and the `collect` examples below resolve `greenroom.py`. It's idempotent and never clobbers a real file you own.
 
 A manual install registers the commands without the plugin namespace, so the examples below that read `/greenroom:new`, `/greenroom:add`, and `/greenroom:sync` are invoked as `/new`, `/add`, and `/sync`. The plugin install is the recommended path and gives you the namespaced form.
 
@@ -135,7 +135,7 @@ tests/smoke.sh
 
 greenroom was built using greenroom: this repo is the stage, and the drafts, design notes, and launch thinking behind it live in a private green room right next to it. Nothing from there ships, which is the whole point.
 
-`SKILL.md` carries the full conventions, edge cases, and the agent-facing instructions. The slash-command definitions live in `commands/`. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
+`skills/setup/SKILL.md` carries the full conventions, edge cases, and the agent-facing instructions. The slash-command definitions live in `commands/`. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
 
 ## License
 

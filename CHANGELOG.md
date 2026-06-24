@@ -5,6 +5,27 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.1.4-alpha] - 2026-06-24
+
+### Changed
+- The skill now lives at `skills/setup/SKILL.md` instead of a root `SKILL.md`,
+  so it invokes as `/greenroom:setup` instead of the stuttering
+  `/greenroom:greenroom`. Auto-activation (by description) is unchanged. ([#3])
+- `install.sh` now links each skill under a `greenroom-` prefix
+  (`~/.claude/skills/greenroom-setup`), so a manual install invokes
+  `/greenroom-setup` instead of a generic `/setup` that could collide with your
+  own skills. For script resolution it builds `~/.claude/skills/greenroom/` as a
+  plain directory holding `scripts/` and `templates/` symlinks, so the commands'
+  script-path fallback and the `collect` examples still find `greenroom.py`
+  without exposing the plugin manifest (which Claude Code would otherwise
+  auto-load as a `greenroom@skills-dir` plugin).
+- `install.sh` is safer around a path it does not own: if `~/.claude/skills/
+  greenroom` is an unrelated symlink or a real file, it skips the script-root
+  setup with a notice (rather than writing `scripts/`/`templates/` through the
+  symlink into your directory, or aborting the whole install) and still links
+  the skill and commands. The README's manual-install section now documents the
+  `greenroom-setup` skill link and the `greenroom/` script-root.
+
 ## [0.1.3-alpha] - 2026-06-24
 
 ### Fixed
@@ -70,7 +91,9 @@ behavior may still change.
 
 [#1]: https://github.com/jesserobbins/greenroom/issues/1
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
+[#3]: https://github.com/jesserobbins/greenroom/issues/3
 [#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.1.4-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.4-alpha
 [0.1.3-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.3-alpha
 [0.1.2-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.2-alpha
 [0.1.1-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.1-alpha
