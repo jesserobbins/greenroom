@@ -29,4 +29,4 @@ After it runs:
 - Remind the user that the canonical way to launch is at the wrapper (`cd <wrapper> && <your-agent>`): every repo is then under cwd and each repo's `AGENTS.md` loads as the agent touches its files. The workspace's `Claude Code` task does the same from VS Code. If new folder roots were added, suggest re-opening the `<project>.code-workspace` (or reloading the window) to pick them up.
 - If the wrong repo was chosen as canonical, re-run with `--canonical <repo-dir>`.
 
-Reference: full conventions and edge cases live in `SKILL.md`, next to the script (same directory `$P` resolves to above).
+Reference: full conventions and edge cases live in `$P/skills/setup/SKILL.md` (`$P` resolves to the greenroom root above).

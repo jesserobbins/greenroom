@@ -135,7 +135,7 @@ tests/smoke.sh
 
 greenroom was built using greenroom: this repo is the stage, and the drafts, design notes, and launch thinking behind it live in a private green room right next to it. Nothing from there ships, which is the whole point.
 
-`SKILL.md` carries the full conventions, edge cases, and the agent-facing instructions. The slash-command definitions live in `commands/`. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
+`skills/setup/SKILL.md` carries the full conventions, edge cases, and the agent-facing instructions. The slash-command definitions live in `commands/`. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
 
 ## License
 
