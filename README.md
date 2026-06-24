@@ -46,7 +46,7 @@ cd greenroom
 ./install.sh
 ```
 
-`install.sh` symlinks the skill into `~/.claude/skills/greenroom` and the slash commands into `~/.claude/commands/`. It's idempotent and never clobbers a real file you own.
+`install.sh` symlinks the skill into `~/.claude/skills/greenroom-setup` (namespaced so it invokes as `/greenroom-setup`, not a generic `/setup`) and the slash commands into `~/.claude/commands/`. It also creates `~/.claude/skills/greenroom/` as a plain directory holding `scripts/` and `templates/` symlinks, so the commands' script-path fallback and the `collect` examples below resolve `greenroom.py`. It's idempotent and never clobbers a real file you own.
 
 A manual install registers the commands without the plugin namespace, so the examples below that read `/greenroom:new`, `/greenroom:add`, and `/greenroom:sync` are invoked as `/new`, `/add`, and `/sync`. The plugin install is the recommended path and gives you the namespaced form.
 
