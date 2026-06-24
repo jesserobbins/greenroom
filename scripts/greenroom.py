@@ -879,6 +879,9 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
         die(f"{src} has uncommitted changes; commit or stash before retrofitting")
 
     parent = src.parent
+    if _is_forbidden_root(parent):
+        die(f"refusing to wrap {src}: its parent {parent} is $HOME, the "
+            "filesystem root, or a standard system directory")
 
     # If args.name is unset, prefer deriving the project name from the wrapper
     # parent rather than the public dir's basename. This makes retrofit
@@ -1018,6 +1021,10 @@ def cmd_new(args: argparse.Namespace) -> None:
     parent = Path(args.parent).expanduser().resolve() if args.parent else Path.cwd()
     if not parent.is_dir():
         die(f"parent dir {parent} does not exist")
+    if _is_forbidden_root(parent):
+        die(f"refusing to create a wrapper under {parent} "
+            "($HOME, the filesystem root, and standard system directories are "
+            "never valid wrapper parents)")
 
     project_name = args.name
     public_dir_name = args.public_name or f"{project_name}-public"
@@ -1098,6 +1105,11 @@ def cmd_sync(args: argparse.Namespace) -> None:
         if found is None:
             die("could not find a greenroom wrapper from here; pass --wrapper or run from inside the project")
         wrapper = found
+
+    if _is_forbidden_root(wrapper):
+        die(f"refusing to treat {wrapper} as a greenroom wrapper "
+            "(greenroom never scaffolds into $HOME, the filesystem root, or a "
+            "standard system directory)")
 
     repos = discover_repos(wrapper)
     if not repos:
