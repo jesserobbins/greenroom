@@ -5,6 +5,18 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.1.4-alpha] - 2026-06-24
+
+### Changed
+- The skill now lives at `skills/setup/SKILL.md` instead of a root `SKILL.md`,
+  so it invokes as `/greenroom:setup` instead of the stuttering
+  `/greenroom:greenroom`. Auto-activation (by description) is unchanged. ([#3])
+- `install.sh` now links every skill under `skills/*/` into `~/.claude/skills/`
+  rather than the repo root. **Manual-install note:** a prior manual install left
+  a symlink at `~/.claude/skills/greenroom`; re-running `install.sh` adds
+  `~/.claude/skills/setup` but does not remove the stale `greenroom` link.
+  Delete `~/.claude/skills/greenroom` by hand if you used the manual install.
+
 ## [0.1.3-alpha] - 2026-06-24
 
 ### Fixed
@@ -70,7 +82,9 @@ behavior may still change.
 
 [#1]: https://github.com/jesserobbins/greenroom/issues/1
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
+[#3]: https://github.com/jesserobbins/greenroom/issues/3
 [#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.1.4-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.4-alpha
 [0.1.3-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.3-alpha
 [0.1.2-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.2-alpha
 [0.1.1-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.1-alpha

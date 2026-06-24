@@ -4,8 +4,8 @@
 # slash commands. Idempotent: safe to re-run. Run after cloning the repo.
 #
 # (If you instead install greenroom as a Claude Code plugin via the marketplace
-#  — `/plugin marketplace add jesserobbins/greenroom` then `/plugin install
-#  greenroom@jesserobbins` — you do NOT need this script; the plugin system wires
+#  (`/plugin marketplace add jesserobbins/greenroom` then `/plugin install
+#  greenroom@jesserobbins`), you do NOT need this script; the plugin system wires
 #  everything for you. This is the manual path for a direct `git clone`.)
 set -euo pipefail
 
@@ -14,7 +14,7 @@ SKILL_DEST="$HOME/.claude/skills"
 CMD_DEST="$HOME/.claude/commands"
 mkdir -p "$SKILL_DEST" "$CMD_DEST"
 
-# link <target> <link-path> <label> — refresh our own symlinks, never clobber a
+# link <target> <link-path> <label>: refresh our own symlinks, never clobber a
 # real file the user owns. Sets `link_result` to "linked" or "skip".
 link_one() {
   local target="$1" link="$2" label="$3"
