@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Symlink this skill into ~/.claude/skills/greenroom and its commands/*.md into
-# ~/.claude/commands/, so Claude Code loads the skill and the /greenroom-* slash
-# commands. Idempotent — safe to re-run. Run after cloning the repo.
+# Symlink each skill under skills/*/ into ~/.claude/skills/<name> and the
+# commands/*.md into ~/.claude/commands/, so Claude Code loads the skills and
+# slash commands. Idempotent: safe to re-run. Run after cloning the repo.
 #
 # (If you instead install greenroom as a Claude Code plugin via the marketplace
 #  — `/plugin marketplace add jesserobbins/greenroom` then `/plugin install
@@ -10,7 +10,6 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_NAME="greenroom"
 SKILL_DEST="$HOME/.claude/skills"
 CMD_DEST="$HOME/.claude/commands"
 mkdir -p "$SKILL_DEST" "$CMD_DEST"
@@ -31,9 +30,14 @@ link_one() {
   link_result="linked"
 }
 
-[ -f "$REPO_DIR/SKILL.md" ] || { echo "error: SKILL.md not found in $REPO_DIR" >&2; exit 1; }
-
-link_one "$REPO_DIR" "$SKILL_DEST/$SKILL_NAME" "skill $SKILL_NAME"
+skill_linked=0
+for skill_dir in "$REPO_DIR"/skills/*/; do
+  [ -f "$skill_dir/SKILL.md" ] || continue          # only dirs that hold a skill
+  sname="$(basename "$skill_dir")"
+  link_result=""
+  link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname"
+  [ "$link_result" = "linked" ] && skill_linked=$((skill_linked + 1))
+done
 
 cmd_linked=0
 for cmd in "$REPO_DIR"/commands/*.md; do
@@ -44,4 +48,4 @@ for cmd in "$REPO_DIR"/commands/*.md; do
   [ "$link_result" = "linked" ] && cmd_linked=$((cmd_linked + 1))
 done
 
-echo "Done. Skill '$SKILL_NAME' → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
+echo "Done. $skill_linked skill(s) → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
