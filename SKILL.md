@@ -7,6 +7,10 @@ description: Set up the greenroom layout: a top-level `<Project>/` directory hol
 
 A per-project layout: a parent folder per project holding two sibling git repos. The public code sits on one side (the stage) and the private notes on the other (the green room you prep in before you go on).
 
+**Supported platforms:** macOS and Linux only (Windows via WSL2). The script assumes POSIX paths, `$HOME`, and `git` on `PATH`; it refuses to run on native Windows.
+
+**Boundary:** greenroom never treats `$HOME`, the filesystem root, or standard system directories as a wrapper or scaffold target, regardless of any signal they carry. Set `GREENROOM_ROOT` to your projects' parent dir to tighten this further; greenroom then refuses to operate at or above it.
+
 ## The pattern
 
 ```

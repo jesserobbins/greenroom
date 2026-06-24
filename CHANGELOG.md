@@ -5,6 +5,39 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.1.3-alpha] - 2026-06-24
+
+### Fixed
+- `sync` no longer treats `$HOME` (or the filesystem root, or a standard system
+  directory) as a greenroom wrapper, even when a stray non-greenroom
+  `.code-workspace` is present or `--wrapper` points there explicitly. A single
+  unrelated workspace file could previously make greenroom scaffold
+  `~/CLAUDE.md` and other wrapper files into the home directory, where
+  `CLAUDE.md` is loaded into nearly every session. ([#4])
+- `retrofit` now refuses when the resolved wrapper is a forbidden root. It
+  previously checked only the parent, so retrofitting an already-wrapped repo
+  whose wrapper *is* the boundary (`$HOME` or `GREENROOM_ROOT`) could still
+  scaffold into it; the final target now clears the same guard `sync` uses.
+- Wrapper detection reads `.code-workspace` files as UTF-8 (matching the write
+  side) and skips an undecodable file instead of crashing classification.
+
+### Added
+- A `.code-workspace` now only marks a directory as a greenroom wrapper if it
+  carries the greenroom sentinel `{"greenroom": {"wrapper": true}}`; greenroom
+  stamps this into every workspace it writes. A generic `greenroom` key alone
+  does not qualify, and a pre-sentinel wrapper still classifies via its
+  `-private` sibling.
+- Optional `GREENROOM_ROOT` env var: a boundary greenroom never crosses upward.
+  Set it to your projects' parent dir (e.g. `export GREENROOM_ROOT="$HOME/GitHub"`).
+  greenroom refuses it as a scaffold *target* but accepts it as a *parent*, so
+  `new`/`retrofit` can create a project directly under your projects dir while
+  `sync` still refuses to treat the boundary itself as a wrapper.
+- greenroom now states its supported platforms (macOS and Linux; Windows via
+  WSL2) and refuses to run on native Windows.
+- The forbidden-root floor of standard `$HOME` subdirectories now includes the
+  XDG dirs that differ on Linux (`Videos`, `Templates`) alongside the macOS
+  ones, for parity across both supported platforms.
+
 ## [0.1.2-alpha] - 2026-06-23
 
 ### Fixed
@@ -37,5 +70,7 @@ behavior may still change.
 
 [#1]: https://github.com/jesserobbins/greenroom/issues/1
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
+[#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.1.3-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.3-alpha
 [0.1.2-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.2-alpha
 [0.1.1-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.1-alpha

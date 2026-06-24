@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -260,6 +261,7 @@ def write_code_workspace(
             es.setdefault(k, v)
         _merge_launcher(existing, task)  # refresh our launcher, keep the user's tasks
         existing.setdefault("extensions", extensions)
+        existing["greenroom"] = {"wrapper": True}  # always stamp the canonical sentinel
         workspace_path.write_text(json.dumps(existing, indent="\t", ensure_ascii=False) + "\n")
         if added:
             info(f"  workspace: added folder(s) {', '.join(added)}")
@@ -270,6 +272,7 @@ def write_code_workspace(
         "settings": settings,
         "tasks": {"version": "2.0.0", "tasks": [task]},
         "extensions": extensions,
+        "greenroom": {"wrapper": True},  # self-identify as a greenroom wrapper
     }
     workspace_path.write_text(json.dumps(workspace, indent="\t", ensure_ascii=False) + "\n")
     return workspace_path
@@ -564,28 +567,129 @@ def migrate_claude_to_agents(
     return agents_path, "migrated"
 
 
+# Dirs greenroom must never treat as a wrapper, wrapper-parent, or scaffold
+# target, regardless of any signal they carry. $HOME is the headline case: a
+# stray *.code-workspace from another tool once made it classify as a wrapper,
+# and greenroom scaffolded ~/CLAUDE.md (loaded into nearly every session).
+# Standard top-level $HOME subdirs a user would never intend as a project root.
+# Best-effort named floor (the $HOME-itself, filesystem-root, and GREENROOM_ROOT
+# guards apply regardless of OS); covers the macOS user dirs plus the XDG dirs
+# that differ on Linux (Videos, Templates). Arbitrary locale-localized casings
+# are out of scope — set GREENROOM_ROOT for a tighter boundary.
+_FORBIDDEN_HOME_SUBDIRS = frozenset({
+    "Documents", "Desktop", "Downloads", "Library",
+    "Music", "Pictures", "Movies", "Videos", "Templates", "Public",
+    ".config", ".claude", ".local",
+})
+
+
+def _greenroom_root() -> Optional[Path]:
+    """The GREENROOM_ROOT boundary, resolved, or None if unset/blank."""
+    raw = os.environ.get("GREENROOM_ROOT", "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
+def _is_always_forbidden(d: Path) -> bool:
+    """The categorical floor: dirs greenroom must never touch in any role.
+
+    $HOME, the filesystem root, standard $HOME subdirs and dotfile config roots,
+    and (when GREENROOM_ROOT is set) any *ancestor* of the boundary. Note this
+    does NOT include GREENROOM_ROOT itself: the boundary is a valid parent for a
+    project created directly under it (see _is_forbidden_parent), but not a valid
+    scaffold target (see _is_forbidden_root).
+    """
+    d = d.resolve()
+    home = Path.home().resolve()
+    if d == home:
+        return True
+    if d.parent == d:  # filesystem root
+        return True
+    if d.parent == home and d.name in _FORBIDDEN_HOME_SUBDIRS:
+        return True
+    gr = _greenroom_root()
+    if gr is not None and d in gr.parents:  # strictly above the boundary
+        return True
+    return False
+
+
+def _is_forbidden_root(d: Path) -> bool:
+    """True if `d` must never be a wrapper or scaffold target.
+
+    The always-forbidden floor plus GREENROOM_ROOT itself: greenroom scaffolds
+    *under* the boundary, never *at* it. Used by classification, the walk-up,
+    and `sync`.
+    """
+    d = d.resolve()
+    if _is_always_forbidden(d):
+        return True
+    gr = _greenroom_root()
+    return gr is not None and d == gr
+
+
+def _is_forbidden_parent(d: Path) -> bool:
+    """True if `d` must never be the *parent* of a new wrapper.
+
+    Same floor as a scaffold target, but GREENROOM_ROOT itself is allowed: the
+    documented workflow `GREENROOM_ROOT="$HOME/GitHub"` then `new --parent
+    "$HOME/GitHub"` creates a project directly under the boundary. Used by
+    `new` and `retrofit`.
+    """
+    return _is_always_forbidden(d)
+
+
+def _has_greenroom_workspace(d: Path) -> bool:
+    """True if `d` holds a *.code-workspace carrying greenroom's sentinel.
+
+    A bare workspace from another tool (chezmoi, a hand-rolled multi-root) must
+    NOT qualify d as a greenroom wrapper; only one greenroom itself wrote does.
+    """
+    for ws in d.glob("*.code-workspace"):
+        try:
+            # Read UTF-8 explicitly to match the write side (write_code_workspace
+            # uses ensure_ascii=False), so a greenroom-authored workspace with
+            # non-ASCII paths still qualifies on a non-UTF-8-locale machine.
+            data = json.loads(ws.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            continue
+        gr = data.get("greenroom") if isinstance(data, dict) else None
+        if isinstance(gr, dict) and gr.get("wrapper") is True:
+            return True
+    return False
+
+
 def _is_project_wrapper(d: Path) -> bool:
     """True if `d` looks like a greenroom wrapper, not just any dir of repos.
 
     Guard against matching a generic clone parent like `~/GitHub` (which would
     grant `..` over the whole home dir and scan every repo). A real wrapper is a
-    non-repo dir holding git repos *and* carrying a wrapper signal: an existing
-    `*.code-workspace`, or a `*-private` repo sibling.
+    non-repo dir holding git repos *and* carrying a wrapper signal: a
+    greenroom-authored `*.code-workspace`, or a `*-private` repo sibling.
     """
+    if _is_forbidden_root(d):
+        return False
     if is_git_repo(d):
         return False
     repos = discover_repos(d)
     if not repos:
         return False
-    if any(d.glob("*.code-workspace")):
+    if _has_greenroom_workspace(d):
         return True
     return any(r.endswith("-private") for r in repos)
 
 
 def _find_wrapper(start: Path) -> Optional[Path]:
-    """Walk up from `start` to the nearest greenroom wrapper (see _is_project_wrapper)."""
+    """Walk up from `start` to the nearest greenroom wrapper (see _is_project_wrapper).
+
+    Never crosses a forbidden root: the walk stops before testing $HOME, the
+    filesystem root, or (when set) GREENROOM_ROOT, so it can never classify a
+    high-blast-radius dir as a wrapper.
+    """
     cur = start.resolve()
     for _ in range(8):
+        if _is_forbidden_root(cur):
+            return None
         if _is_project_wrapper(cur):
             return cur
         if cur.parent == cur:
@@ -811,6 +915,9 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
         die(f"{src} has uncommitted changes; commit or stash before retrofitting")
 
     parent = src.parent
+    if _is_forbidden_parent(parent):
+        die(f"refusing to wrap {src}: its parent {parent} is $HOME, the "
+            "filesystem root, or a standard system directory")
 
     # If args.name is unset, prefer deriving the project name from the wrapper
     # parent rather than the public dir's basename. This makes retrofit
@@ -886,6 +993,15 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
             die(f"target {public_path} already exists")
         src.rename(public_path)
 
+    # The parent passed _is_forbidden_parent (which permits GREENROOM_ROOT as a
+    # parent), but the resolved wrapper is the actual scaffold target — it must
+    # clear the stricter _is_forbidden_root. Without this, retrofitting an
+    # already-wrapped repo whose wrapper IS the boundary (wrapper == parent ==
+    # GREENROOM_ROOT) would scaffold into the boundary that sync refuses.
+    if _is_forbidden_root(wrapper):
+        die(f"refusing to scaffold into {wrapper}: it is $HOME, the filesystem "
+            "root, a standard system directory, or GREENROOM_ROOT")
+
     # Prefer the canonical <project>-private/, but if a legacy `private/`
     # already exists alongside, leave it where it is (don't auto-rename).
     existing_private = _find_existing_private(wrapper, project_name, public_path)
@@ -950,6 +1066,10 @@ def cmd_new(args: argparse.Namespace) -> None:
     parent = Path(args.parent).expanduser().resolve() if args.parent else Path.cwd()
     if not parent.is_dir():
         die(f"parent dir {parent} does not exist")
+    if _is_forbidden_parent(parent):
+        die(f"refusing to create a wrapper under {parent} "
+            "($HOME, the filesystem root, and standard system directories are "
+            "never valid wrapper parents)")
 
     project_name = args.name
     public_dir_name = args.public_name or f"{project_name}-public"
@@ -1030,6 +1150,11 @@ def cmd_sync(args: argparse.Namespace) -> None:
         if found is None:
             die("could not find a greenroom wrapper from here; pass --wrapper or run from inside the project")
         wrapper = found
+
+    if _is_forbidden_root(wrapper):
+        die(f"refusing to treat {wrapper} as a greenroom wrapper "
+            "(greenroom never scaffolds into $HOME, the filesystem root, or a "
+            "standard system directory)")
 
     repos = discover_repos(wrapper)
     if not repos:
@@ -1475,6 +1600,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list[str]] = None) -> None:
+    if sys.platform == "win32":
+        die("greenroom supports macOS and Linux only (Windows via WSL2). "
+            "Native Windows is not supported.")
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

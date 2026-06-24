@@ -622,4 +622,95 @@ echo "$nhash2" | grep -qE '^[0-9a-f]{16}$' || fail "M8: hash dir '$nhash2' is no
 [ "$nhash1" != "$nhash2" ] || fail "M8: both colliding notes got the same hash dir ($nhash1); hashes must differ"
 ok "M8: colliding notes both land dated under distinct hash dirs (M8 boundary)"
 
+# --- 21. a stray non-greenroom .code-workspace must NOT qualify a dir as a wrapper (issue #4) ---
+mkdir -p "$T/strayws"
+mkrepo "$T/strayws/somerepo"
+echo '{"folders":[{"path":"."}]}' > "$T/strayws/chezmoi.code-workspace"   # not greenroom's
+( cd "$T/strayws/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "sync treated a stray-workspace dir as a wrapper"
+[ ! -f "$T/strayws/CLAUDE.md" ] || fail "sync scaffolded CLAUDE.md into a stray-workspace dir"
+[ ! -f "$T/strayws/AGENTS.md" ] || fail "sync scaffolded AGENTS.md into a stray-workspace dir"
+ok "stray non-greenroom .code-workspace does not qualify a wrapper"
+
+# --- 22. explicit --wrapper at a forbidden root is refused, nothing written (issue #4) ---
+fake_home="$T/fakehome"
+mkdir -p "$fake_home"
+mkrepo "$fake_home/proj"
+HOME="$fake_home" "$SCRIPT" sync --wrapper "$fake_home" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "sync --wrapper \$HOME was not refused"
+[ ! -f "$fake_home/CLAUDE.md" ] || fail "sync wrote CLAUDE.md into \$HOME"
+[ ! -f "$fake_home/AGENTS.md" ] || fail "sync wrote AGENTS.md into \$HOME"
+ok "explicit --wrapper at \$HOME is refused and writes nothing"
+
+# --- 23. a greenroom sentinel workspace DOES qualify; sentinel-only wrapper re-syncs cleanly ---
+mkdir -p "$T/realwrap"
+mkrepo "$T/realwrap/realwrap-public"
+mkrepo "$T/realwrap/realwrap-private"
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null
+grep -q '"greenroom"' "$T/realwrap"/*.code-workspace || fail "sync did not stamp the greenroom sentinel"
+# drop the -private sibling: the sentinel alone must keep it a wrapper on re-sync
+rm -rf "$T/realwrap/realwrap-private"
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "sentinel-only wrapper no longer recognized on re-sync"
+ok "greenroom sentinel workspace qualifies a wrapper on its own"
+
+# --- 24. GREENROOM_ROOT boundary: a wrapper above the boundary is refused ---
+mkdir -p "$T/below/proj"
+mkrepo "$T/below/proj/proj-public"
+mkrepo "$T/below/proj/proj-private"
+# boundary at $T/below: the wrapper $T/below/proj is below it -> allowed
+GREENROOM_ROOT="$T/below" sh -c "cd '$T/below/proj/proj-public' && '$SCRIPT' sync" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "GREENROOM_ROOT wrongly refused a wrapper below the boundary"
+# boundary at $T/below/proj: $T/below/proj IS the boundary -> refused as a wrapper target
+GREENROOM_ROOT="$T/below/proj" "$SCRIPT" sync --wrapper "$T/below/proj" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "GREENROOM_ROOT did not refuse its own dir as a wrapper"
+ok "GREENROOM_ROOT refuses its own dir and any ancestor as a wrapper"
+
+# --- 25. GREENROOM_ROOT is a valid PARENT (target vs parent split, issue #4 / iter-1 codex M) ---
+# The documented workflow: GREENROOM_ROOT="$HOME/GitHub"; new --parent "$HOME/GitHub".
+mkdir -p "$T/grroot"
+GREENROOM_ROOT="$T/grroot" "$SCRIPT" new demo --parent "$T/grroot" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "new --parent \$GREENROOM_ROOT was refused (boundary should be a valid parent)"
+[ -d "$T/grroot/demo/demo-private" ] || fail "new --parent \$GREENROOM_ROOT did not create the wrapper"
+# retrofit of a repo directly under the boundary is likewise allowed
+mkrepo "$T/grroot/leaf"
+GREENROOM_ROOT="$T/grroot" "$SCRIPT" retrofit "$T/grroot/leaf" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "retrofit of a repo directly under \$GREENROOM_ROOT was refused"
+[ -d "$T/grroot/leaf/leaf-private/.git" ] || fail "retrofit under \$GREENROOM_ROOT did not scaffold the private repo"
+# but the boundary itself is still refused as a scaffold TARGET, and an ancestor as a parent
+GREENROOM_ROOT="$T/grroot" "$SCRIPT" new x --parent "$T" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "new --parent above the boundary was allowed (should be refused)"
+# retrofit of an ALREADY-WRAPPED repo whose wrapper IS the boundary must be refused
+# (wrapper == parent == GREENROOM_ROOT; the final target must clear _is_forbidden_root,
+# not just _is_forbidden_parent) (iter-4 codex M, greenroom.py:913)
+mkdir -p "$T/atroot"
+mkrepo "$T/atroot/atroot-public"                                  # makes $T/atroot look already-wrapped
+mkdir -p "$T/atroot/atroot-private"                               # -private sibling => _looks_like_wrapper
+GREENROOM_ROOT="$T/atroot" "$SCRIPT" retrofit "$T/atroot/atroot-public" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "retrofit into a wrapper that IS \$GREENROOM_ROOT was allowed (should be refused)"
+[ ! -f "$T/atroot/atroot.code-workspace" ] || fail "retrofit scaffolded into the boundary despite refusal"
+# and a project created under the boundary can still be synced afterward (not stranded by the walk-stop)
+GREENROOM_ROOT="$T/grroot" sh -c "cd '$T/grroot/leaf/leaf-public' && '$SCRIPT' sync" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "a wrapper created under \$GREENROOM_ROOT could not be synced afterward"
+ok "GREENROOM_ROOT is a valid parent for new/retrofit, still refused as a target and above"
+
+# --- 26. workspace sentinel requires {"wrapper": true}, not just any greenroom key (iter-1 claude-code M/L) ---
+mkdir -p "$T/sent"
+mkrepo "$T/sent/somerepo"
+echo '{"folders":[{"path":"."}],"greenroom":{}}' > "$T/sent/x.code-workspace"     # dict but no wrapper:true
+( cd "$T/sent/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "an empty greenroom:{} workspace wrongly qualified a wrapper"
+echo '{"folders":[{"path":"."}],"greenroom":"yes"}' > "$T/sent/x.code-workspace"  # non-dict value
+( cd "$T/sent/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "a non-dict greenroom value wrongly qualified a wrapper"
+ok "workspace sentinel requires {\"wrapper\": true}, not just any greenroom key"
+
+# --- 27. a non-UTF-8 / undecodable .code-workspace is skipped, not a crash (iter-2 claude-code L) ---
+mkdir -p "$T/badenc"
+mkrepo "$T/badenc/somerepo"
+printf '\xff\xfe\x00bad' > "$T/badenc/x.code-workspace"                            # invalid UTF-8 bytes
+( cd "$T/badenc/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "an undecodable .code-workspace wrongly qualified a wrapper"
+ok "an undecodable .code-workspace is skipped without crashing classification"
+
 echo "all $pass checks passed"
