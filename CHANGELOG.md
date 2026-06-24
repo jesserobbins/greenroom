@@ -17,10 +17,15 @@ reaches a stable release.
 
 ### Added
 - A `.code-workspace` now only marks a directory as a greenroom wrapper if it
-  carries a greenroom sentinel; greenroom stamps this into every workspace it
-  writes. A pre-sentinel wrapper still classifies via its `-private` sibling.
+  carries the greenroom sentinel `{"greenroom": {"wrapper": true}}`; greenroom
+  stamps this into every workspace it writes. A generic `greenroom` key alone
+  does not qualify, and a pre-sentinel wrapper still classifies via its
+  `-private` sibling.
 - Optional `GREENROOM_ROOT` env var: a boundary greenroom never crosses upward.
-  Set it to your projects' parent dir to refuse any wrapper at or above it.
+  Set it to your projects' parent dir (e.g. `export GREENROOM_ROOT="$HOME/GitHub"`).
+  greenroom refuses it as a scaffold *target* but accepts it as a *parent*, so
+  `new`/`retrofit` can create a project directly under your projects dir while
+  `sync` still refuses to treat the boundary itself as a wrapper.
 - greenroom now states its supported platforms (macOS and Linux; Windows via
   WSL2) and refuses to run on native Windows.
 
