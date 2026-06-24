@@ -1555,6 +1555,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list[str]] = None) -> None:
+    if sys.platform == "win32":
+        die("greenroom supports macOS and Linux only (Windows via WSL2). "
+            "Native Windows is not supported.")
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
