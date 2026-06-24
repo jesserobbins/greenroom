@@ -14,9 +14,11 @@ reaches a stable release.
 - `install.sh` now links each skill under a `greenroom-` prefix
   (`~/.claude/skills/greenroom-setup`), so a manual install invokes
   `/greenroom-setup` instead of a generic `/setup` that could collide with your
-  own skills. It also keeps `~/.claude/skills/greenroom` pointed at the repo root
-  so the commands' script-path fallback and the `collect` examples still resolve
-  `greenroom.py` on a manual install.
+  own skills. For script resolution it builds `~/.claude/skills/greenroom/` as a
+  plain directory holding `scripts/` and `templates/` symlinks, so the commands'
+  script-path fallback and the `collect` examples still find `greenroom.py`
+  without exposing the plugin manifest (which Claude Code would otherwise
+  auto-load as a `greenroom@skills-dir` plugin).
 
 ## [0.1.3-alpha] - 2026-06-24
 

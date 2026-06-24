@@ -32,11 +32,18 @@ link_one() {
   link_result="linked"
 }
 
-# Expose the repo root so the commands' tier-3 script-path fallback
+# Expose the script (and its templates) at the commands' tier-3 fallback path
 # ($HOME/.claude/skills/greenroom/scripts/greenroom.py) and the README/SKILL
-# collect examples resolve on a manual install. This is not a skill itself; it
-# holds scripts/, templates/, etc.
-link_one "$REPO_DIR" "$SKILL_DEST/greenroom" "greenroom script root"
+# collect examples. This is a plain directory holding two symlinks, NOT a copy
+# of the repo root: symlinking the whole root would drag in .claude-plugin/
+# plugin.json and the nested skills/, which Claude Code would auto-load as a
+# `greenroom@skills-dir` plugin (reintroducing the /greenroom:setup stutter).
+# Exposing only scripts/ and templates/ keeps script resolution working with no
+# manifest and no nested skill in scope.
+SCRIPT_ROOT="$SKILL_DEST/greenroom"
+mkdir -p "$SCRIPT_ROOT"
+link_one "$REPO_DIR/scripts" "$SCRIPT_ROOT/scripts" "greenroom scripts"
+link_one "$REPO_DIR/templates" "$SCRIPT_ROOT/templates" "greenroom templates"
 
 # Link each skill under a greenroom- prefix so a manual install gets a
 # namespaced /greenroom-<name> instead of a generic /<name> that could collide
