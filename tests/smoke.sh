@@ -713,4 +713,11 @@ printf '\xff\xfe\x00bad' > "$T/badenc/x.code-workspace"                         
 [ "$rc" -ne 0 ] || fail "an undecodable .code-workspace wrongly qualified a wrapper"
 ok "an undecodable .code-workspace is skipped without crashing classification"
 
+# --- 28. skill lives at skills/setup/ (no root SKILL.md), so it invokes as /greenroom:setup (issue #3) ---
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[ -f "$REPO_ROOT/skills/setup/SKILL.md" ] || fail "skills/setup/SKILL.md is missing"
+[ ! -f "$REPO_ROOT/SKILL.md" ] || fail "a root SKILL.md still exists (would invoke as /greenroom:greenroom)"
+grep -q '^name: setup$' "$REPO_ROOT/skills/setup/SKILL.md" || fail "skills/setup/SKILL.md frontmatter name is not 'setup'"
+ok "skill lives at skills/setup/ with name: setup and no root SKILL.md"
+
 echo "all $pass checks passed"
