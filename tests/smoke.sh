@@ -720,4 +720,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 grep -q '^name: setup$' "$REPO_ROOT/skills/setup/SKILL.md" || fail "skills/setup/SKILL.md frontmatter name is not 'setup'"
 ok "skill lives at skills/setup/ with name: setup and no root SKILL.md"
 
+# --- 26. manual install: namespaced skill name + script resolves at the tier-3 path (issue #3) ---
+mh="$T/manualhome"
+mkdir -p "$mh"
+HOME="$mh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh failed"
+[ -L "$mh/.claude/skills/greenroom-setup" ] || fail "manual install did not create /greenroom-setup (namespaced)"
+[ ! -e "$mh/.claude/skills/setup" ] || fail "manual install created a bare /setup (collision risk)"
+[ -e "$mh/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "tier-3 fallback ~/.claude/skills/greenroom/scripts/greenroom.py does not resolve"
+[ ! -f "$mh/.claude/skills/greenroom/SKILL.md" ] || fail "script-root dir has a SKILL.md (would mis-register as a skill)"
+ok "manual install gives /greenroom-setup and resolves the script at the tier-3 path"
+
 echo "all $pass checks passed"

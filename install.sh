@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Symlink each skill under skills/*/ into ~/.claude/skills/<name> and the
-# commands/*.md into ~/.claude/commands/, so Claude Code loads the skills and
-# slash commands. Idempotent: safe to re-run. Run after cloning the repo.
+# Symlink each skill under skills/*/ into ~/.claude/skills/greenroom-<name> and
+# the commands/*.md into ~/.claude/commands/, so Claude Code loads the skills and
+# slash commands. Also exposes the repo root at ~/.claude/skills/greenroom so the
+# commands' script-path fallback (and the README/SKILL collect examples) resolve
+# greenroom.py on a manual install. Idempotent: safe to re-run after cloning.
 #
 # (If you instead install greenroom as a Claude Code plugin via the marketplace
 #  (`/plugin marketplace add jesserobbins/greenroom` then `/plugin install
@@ -30,12 +32,21 @@ link_one() {
   link_result="linked"
 }
 
+# Expose the repo root so the commands' tier-3 script-path fallback
+# ($HOME/.claude/skills/greenroom/scripts/greenroom.py) and the README/SKILL
+# collect examples resolve on a manual install. This is not a skill itself; it
+# holds scripts/, templates/, etc.
+link_one "$REPO_DIR" "$SKILL_DEST/greenroom" "greenroom script root"
+
+# Link each skill under a greenroom- prefix so a manual install gets a
+# namespaced /greenroom-<name> instead of a generic /<name> that could collide
+# with the user's own skills. (A plugin install gives /greenroom:<name>.)
 skill_linked=0
 for skill_dir in "$REPO_DIR"/skills/*/; do
   [ -f "$skill_dir/SKILL.md" ] || continue          # only dirs that hold a skill
   sname="$(basename "$skill_dir")"
   link_result=""
-  link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname"
+  link_one "${skill_dir%/}" "$SKILL_DEST/greenroom-$sname" "skill greenroom-$sname"
   [ "$link_result" = "linked" ] && skill_linked=$((skill_linked + 1))
 done
 

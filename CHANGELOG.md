@@ -11,11 +11,12 @@ reaches a stable release.
 - The skill now lives at `skills/setup/SKILL.md` instead of a root `SKILL.md`,
   so it invokes as `/greenroom:setup` instead of the stuttering
   `/greenroom:greenroom`. Auto-activation (by description) is unchanged. ([#3])
-- `install.sh` now links every skill under `skills/*/` into `~/.claude/skills/`
-  rather than the repo root. **Manual-install note:** a prior manual install left
-  a symlink at `~/.claude/skills/greenroom`; re-running `install.sh` adds
-  `~/.claude/skills/setup` but does not remove the stale `greenroom` link.
-  Delete `~/.claude/skills/greenroom` by hand if you used the manual install.
+- `install.sh` now links each skill under a `greenroom-` prefix
+  (`~/.claude/skills/greenroom-setup`), so a manual install invokes
+  `/greenroom-setup` instead of a generic `/setup` that could collide with your
+  own skills. It also keeps `~/.claude/skills/greenroom` pointed at the repo root
+  so the commands' script-path fallback and the `collect` examples still resolve
+  `greenroom.py` on a manual install.
 
 ## [0.1.3-alpha] - 2026-06-24
 
