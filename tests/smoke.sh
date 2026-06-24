@@ -666,4 +666,34 @@ GREENROOM_ROOT="$T/below/proj" "$SCRIPT" sync --wrapper "$T/below/proj" >/dev/nu
 [ "$rc" -ne 0 ] || fail "GREENROOM_ROOT did not refuse its own dir as a wrapper"
 ok "GREENROOM_ROOT refuses its own dir and any ancestor as a wrapper"
 
+# --- 25. GREENROOM_ROOT is a valid PARENT (target vs parent split, issue #4 / iter-1 codex M) ---
+# The documented workflow: GREENROOM_ROOT="$HOME/GitHub"; new --parent "$HOME/GitHub".
+mkdir -p "$T/grroot"
+GREENROOM_ROOT="$T/grroot" "$SCRIPT" new demo --parent "$T/grroot" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "new --parent \$GREENROOM_ROOT was refused (boundary should be a valid parent)"
+[ -d "$T/grroot/demo/demo-private" ] || fail "new --parent \$GREENROOM_ROOT did not create the wrapper"
+# retrofit of a repo directly under the boundary is likewise allowed
+mkrepo "$T/grroot/leaf"
+GREENROOM_ROOT="$T/grroot" "$SCRIPT" retrofit "$T/grroot/leaf" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "retrofit of a repo directly under \$GREENROOM_ROOT was refused"
+[ -d "$T/grroot/leaf/leaf-private/.git" ] || fail "retrofit under \$GREENROOM_ROOT did not scaffold the private repo"
+# but the boundary itself is still refused as a scaffold TARGET, and an ancestor as a parent
+GREENROOM_ROOT="$T/grroot" "$SCRIPT" new x --parent "$T" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "new --parent above the boundary was allowed (should be refused)"
+# and a project created under the boundary can still be synced afterward (not stranded by the walk-stop)
+GREENROOM_ROOT="$T/grroot" sh -c "cd '$T/grroot/leaf/leaf-public' && '$SCRIPT' sync" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "a wrapper created under \$GREENROOM_ROOT could not be synced afterward"
+ok "GREENROOM_ROOT is a valid parent for new/retrofit, still refused as a target and above"
+
+# --- 26. workspace sentinel requires {"wrapper": true}, not just any greenroom key (iter-1 claude-code M/L) ---
+mkdir -p "$T/sent"
+mkrepo "$T/sent/somerepo"
+echo '{"folders":[{"path":"."}],"greenroom":{}}' > "$T/sent/x.code-workspace"     # dict but no wrapper:true
+( cd "$T/sent/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "an empty greenroom:{} workspace wrongly qualified a wrapper"
+echo '{"folders":[{"path":"."}],"greenroom":"yes"}' > "$T/sent/x.code-workspace"  # non-dict value
+( cd "$T/sent/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "a non-dict greenroom value wrongly qualified a wrapper"
+ok "workspace sentinel requires {\"wrapper\": true}, not just any greenroom key"
+
 echo "all $pass checks passed"

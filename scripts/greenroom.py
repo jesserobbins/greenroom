@@ -261,7 +261,7 @@ def write_code_workspace(
             es.setdefault(k, v)
         _merge_launcher(existing, task)  # refresh our launcher, keep the user's tasks
         existing.setdefault("extensions", extensions)
-        existing.setdefault("greenroom", {"wrapper": True})  # self-identify as a greenroom wrapper
+        existing["greenroom"] = {"wrapper": True}  # always stamp the canonical sentinel
         workspace_path.write_text(json.dumps(existing, indent="\t", ensure_ascii=False) + "\n")
         if added:
             info(f"  workspace: added folder(s) {', '.join(added)}")
@@ -586,12 +586,14 @@ def _greenroom_root() -> Optional[Path]:
     return Path(raw).expanduser().resolve()
 
 
-def _is_forbidden_root(d: Path) -> bool:
-    """True if `d` must never be a wrapper / wrapper-parent / scaffold target.
+def _is_always_forbidden(d: Path) -> bool:
+    """The categorical floor: dirs greenroom must never touch in any role.
 
-    Categorical: no contained repo or stray workspace file can override this.
-    Covers $HOME, the filesystem root, standard $HOME subdirs and dotfile
-    config roots, and (when set) GREENROOM_ROOT itself plus any ancestor of it.
+    $HOME, the filesystem root, standard $HOME subdirs and dotfile config roots,
+    and (when GREENROOM_ROOT is set) any *ancestor* of the boundary. Note this
+    does NOT include GREENROOM_ROOT itself: the boundary is a valid parent for a
+    project created directly under it (see _is_forbidden_parent), but not a valid
+    scaffold target (see _is_forbidden_root).
     """
     d = d.resolve()
     home = Path.home().resolve()
@@ -602,9 +604,34 @@ def _is_forbidden_root(d: Path) -> bool:
     if d.parent == home and d.name in _FORBIDDEN_HOME_SUBDIRS:
         return True
     gr = _greenroom_root()
-    if gr is not None and (d == gr or d in gr.parents):
+    if gr is not None and d in gr.parents:  # strictly above the boundary
         return True
     return False
+
+
+def _is_forbidden_root(d: Path) -> bool:
+    """True if `d` must never be a wrapper or scaffold target.
+
+    The always-forbidden floor plus GREENROOM_ROOT itself: greenroom scaffolds
+    *under* the boundary, never *at* it. Used by classification, the walk-up,
+    and `sync`.
+    """
+    d = d.resolve()
+    if _is_always_forbidden(d):
+        return True
+    gr = _greenroom_root()
+    return gr is not None and d == gr
+
+
+def _is_forbidden_parent(d: Path) -> bool:
+    """True if `d` must never be the *parent* of a new wrapper.
+
+    Same floor as a scaffold target, but GREENROOM_ROOT itself is allowed: the
+    documented workflow `GREENROOM_ROOT="$HOME/GitHub"` then `new --parent
+    "$HOME/GitHub"` creates a project directly under the boundary. Used by
+    `new` and `retrofit`.
+    """
+    return _is_always_forbidden(d)
 
 
 def _has_greenroom_workspace(d: Path) -> bool:
@@ -618,7 +645,8 @@ def _has_greenroom_workspace(d: Path) -> bool:
             data = json.loads(ws.read_text())
         except (json.JSONDecodeError, OSError):
             continue
-        if isinstance(data, dict) and isinstance(data.get("greenroom"), dict):
+        gr = data.get("greenroom") if isinstance(data, dict) else None
+        if isinstance(gr, dict) and gr.get("wrapper") is True:
             return True
     return False
 
@@ -879,7 +907,7 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
         die(f"{src} has uncommitted changes; commit or stash before retrofitting")
 
     parent = src.parent
-    if _is_forbidden_root(parent):
+    if _is_forbidden_parent(parent):
         die(f"refusing to wrap {src}: its parent {parent} is $HOME, the "
             "filesystem root, or a standard system directory")
 
@@ -1021,7 +1049,7 @@ def cmd_new(args: argparse.Namespace) -> None:
     parent = Path(args.parent).expanduser().resolve() if args.parent else Path.cwd()
     if not parent.is_dir():
         die(f"parent dir {parent} does not exist")
-    if _is_forbidden_root(parent):
+    if _is_forbidden_parent(parent):
         die(f"refusing to create a wrapper under {parent} "
             "($HOME, the filesystem root, and standard system directories are "
             "never valid wrapper parents)")
