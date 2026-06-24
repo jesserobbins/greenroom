@@ -642,7 +642,10 @@ def _has_greenroom_workspace(d: Path) -> bool:
     """
     for ws in d.glob("*.code-workspace"):
         try:
-            data = json.loads(ws.read_text())
+            # Read UTF-8 explicitly to match the write side (write_code_workspace
+            # uses ensure_ascii=False), so a greenroom-authored workspace with
+            # non-ASCII paths still qualifies on a non-UTF-8-locale machine.
+            data = json.loads(ws.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
         gr = data.get("greenroom") if isinstance(data, dict) else None
