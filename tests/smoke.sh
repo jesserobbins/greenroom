@@ -759,7 +759,19 @@ echo "$out2" | grep -q "SKIP" && fail "second install.sh run hit an unexpected S
 [ -e "$mh/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "idempotent run dropped script resolution"
 ok "manual install is idempotent (re-run is clean, links stable)"
 
-# --- 30. install.sh never clobbers a real (non-symlink) file the user owns at a target path ---
+# --- 30b. migration: an older installer's greenroom->repo-root symlink is replaced
+#          by a script-only dir, so the plugin manifest is no longer exposed (issue #3) ---
+gh_mig="$T/mighome"
+mkdir -p "$gh_mig/.claude/skills"
+ln -s "$REPO_ROOT" "$gh_mig/.claude/skills/greenroom"            # simulate the old root-symlink layout
+HOME="$gh_mig" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh errored migrating an old root symlink"
+[ ! -L "$gh_mig/.claude/skills/greenroom" ] || fail "old greenroom root symlink survived (manifest still exposed)"
+[ -d "$gh_mig/.claude/skills/greenroom" ] || fail "migration did not leave a real script-root dir"
+[ ! -e "$gh_mig/.claude/skills/greenroom/.claude-plugin/plugin.json" ] || fail "migration left the plugin manifest exposed"
+[ -e "$gh_mig/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "migration broke script resolution"
+ok "old greenroom root symlink is migrated to a manifest-free script-root dir"
+
+# --- 31. install.sh never clobbers a real (non-symlink) file the user owns at a target path ---
 ch="$T/clobberhome"
 mkdir -p "$ch/.claude/skills"
 echo "do not touch" > "$ch/.claude/skills/greenroom-setup"        # a real file, not our symlink
