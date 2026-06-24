@@ -27,6 +27,8 @@ The parent folder has no `.git/` of its own. It's an organizational container, s
 
 ## Install
 
+**Requirements:** macOS or Linux (Windows is supported via WSL2, which presents a Linux environment). You need Python 3 and `git` on your `PATH`; the manual install also needs `bash`. greenroom uses POSIX paths and `$HOME` semantics, so native Windows (cmd/PowerShell) is not supported, and the script refuses to run there.
+
 ### As a Claude Code plugin (recommended)
 
 ```
@@ -106,6 +108,8 @@ gr() { cd ~/src/"$1" && claude; }   # or: codex, gemini, aider, …
 ```
 
 As a safety net for a stray launch *inside* one repo, the script also writes a git-excluded `.claude/settings.local.json` into each repo granting its siblings (`../<name>`), so even then the others stay reachable. Those private paths never reach the public repo.
+
+**Optional boundary.** Set `GREENROOM_ROOT` (e.g. `export GREENROOM_ROOT="$HOME/GitHub"`) to the directory your projects live under. greenroom then operates only at or below it and refuses to scaffold at or above it. It is a safety boundary, not a target: greenroom works fine without it, and it never treats `$HOME`, the filesystem root, or standard system directories (`~/Documents`, `~/Desktop`, and the like) as a wrapper regardless of any signal they carry.
 
 ## Recovering docs already in public history
 

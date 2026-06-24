@@ -5,6 +5,25 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.1.3-alpha] - 2026-06-24
+
+### Fixed
+- `sync` no longer treats `$HOME` (or the filesystem root, or a standard system
+  directory) as a greenroom wrapper, even when a stray non-greenroom
+  `.code-workspace` is present or `--wrapper` points there explicitly. A single
+  unrelated workspace file could previously make greenroom scaffold
+  `~/CLAUDE.md` and other wrapper files into the home directory, where
+  `CLAUDE.md` is loaded into nearly every session. ([#4])
+
+### Added
+- A `.code-workspace` now only marks a directory as a greenroom wrapper if it
+  carries a greenroom sentinel; greenroom stamps this into every workspace it
+  writes. A pre-sentinel wrapper still classifies via its `-private` sibling.
+- Optional `GREENROOM_ROOT` env var: a boundary greenroom never crosses upward.
+  Set it to your projects' parent dir to refuse any wrapper at or above it.
+- greenroom now states its supported platforms (macOS and Linux; Windows via
+  WSL2) and refuses to run on native Windows.
+
 ## [0.1.2-alpha] - 2026-06-23
 
 ### Fixed
@@ -37,5 +56,7 @@ behavior may still change.
 
 [#1]: https://github.com/jesserobbins/greenroom/issues/1
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
+[#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.1.3-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.3-alpha
 [0.1.2-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.2-alpha
 [0.1.1-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.1-alpha
