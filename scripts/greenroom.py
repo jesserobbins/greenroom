@@ -644,9 +644,16 @@ def _is_project_wrapper(d: Path) -> bool:
 
 
 def _find_wrapper(start: Path) -> Optional[Path]:
-    """Walk up from `start` to the nearest greenroom wrapper (see _is_project_wrapper)."""
+    """Walk up from `start` to the nearest greenroom wrapper (see _is_project_wrapper).
+
+    Never crosses a forbidden root: the walk stops before testing $HOME, the
+    filesystem root, or (when set) GREENROOM_ROOT, so it can never classify a
+    high-blast-radius dir as a wrapper.
+    """
     cur = start.resolve()
     for _ in range(8):
+        if _is_forbidden_root(cur):
+            return None
         if _is_project_wrapper(cur):
             return cur
         if cur.parent == cur:
