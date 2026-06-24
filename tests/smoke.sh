@@ -696,4 +696,12 @@ echo '{"folders":[{"path":"."}],"greenroom":"yes"}' > "$T/sent/x.code-workspace"
 [ "$rc" -ne 0 ] || fail "a non-dict greenroom value wrongly qualified a wrapper"
 ok "workspace sentinel requires {\"wrapper\": true}, not just any greenroom key"
 
+# --- 27. a non-UTF-8 / undecodable .code-workspace is skipped, not a crash (iter-2 claude-code L) ---
+mkdir -p "$T/badenc"
+mkrepo "$T/badenc/somerepo"
+printf '\xff\xfe\x00bad' > "$T/badenc/x.code-workspace"                            # invalid UTF-8 bytes
+( cd "$T/badenc/somerepo" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "an undecodable .code-workspace wrongly qualified a wrapper"
+ok "an undecodable .code-workspace is skipped without crashing classification"
+
 echo "all $pass checks passed"

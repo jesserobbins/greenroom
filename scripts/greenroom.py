@@ -643,7 +643,7 @@ def _has_greenroom_workspace(d: Path) -> bool:
     for ws in d.glob("*.code-workspace"):
         try:
             data = json.loads(ws.read_text())
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
         gr = data.get("greenroom") if isinstance(data, dict) else None
         if isinstance(gr, dict) and gr.get("wrapper") is True:
