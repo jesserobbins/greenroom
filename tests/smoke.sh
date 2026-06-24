@@ -795,4 +795,14 @@ echo "$out3" | grep -q "SKIP skill greenroom-setup" || fail "install.sh did not 
 [ "$(cat "$ch/.claude/skills/greenroom-setup")" = "do not touch" ] || fail "install.sh clobbered a real user file"
 ok "install.sh skips (never clobbers) a real user file at a skill target"
 
+# --- 36. a real (non-dir) file at the script-root path is SKIPped, not fatal (iter-4 codex L) ---
+fh="$T/filehome"
+mkdir -p "$fh/.claude/skills"
+echo "user file" > "$fh/.claude/skills/greenroom"                  # a real file where the script-root dir would go
+out4="$(HOME="$fh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh aborted on a real file at the script-root path"
+echo "$out4" | grep -q "SKIP script-root" || fail "install.sh did not SKIP a real file at the script-root path"
+[ "$(cat "$fh/.claude/skills/greenroom")" = "user file" ] || fail "install.sh clobbered a real file at the script-root path"
+[ -L "$fh/.claude/skills/greenroom-setup" ] || fail "install.sh did not still link the skill after the script-root SKIP"
+ok "a real file at the script-root path is SKIPped and the rest of the install proceeds"
+
 echo "all $pass checks passed"

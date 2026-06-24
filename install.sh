@@ -62,6 +62,11 @@ fi
 # resolution falls back to the plugin-cache tier, and the user keeps their dir.
 if [ -L "$SCRIPT_ROOT" ]; then
   echo "SKIP script-root: $SCRIPT_ROOT is an unrelated symlink (leaving it and its target untouched); script resolution will use the plugin cache if present"
+elif [ -e "$SCRIPT_ROOT" ] && [ ! -d "$SCRIPT_ROOT" ]; then
+  # A real (non-dir, non-symlink) file the user owns. mkdir -p would fail and,
+  # under set -e, abort the whole install. Skip it like every other target and
+  # let the skill/command links still go in.
+  echo "SKIP script-root: $SCRIPT_ROOT exists and is not a directory (leaving it untouched); script resolution will use the plugin cache if present"
 else
   mkdir -p "$SCRIPT_ROOT"
   link_one "$REPO_DIR/scripts" "$SCRIPT_ROOT/scripts" "greenroom scripts"
