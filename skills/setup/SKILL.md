@@ -61,7 +61,7 @@ A VS Code multi-root workspace file (`<project>.code-workspace`) sits at the wra
 ## Slash commands
 
 - **`/greenroom:new <name> [--clone <url> | --init-public] [--parent <dir>]`**: create a new project from scratch. Optionally clone an existing public repo into it, init an empty public repo, or leave the public dir for the user to populate later.
-- **`/greenroom:add <path-to-existing-public-repo>`**: take an existing public repo (e.g. `~/src/foo/`) and add the greenroom layout around it. Moves the public repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` alongside.
+- **`/greenroom:add <path-to-existing-public-repo>`**: take an existing public repo (e.g. `~/src/foo/`) and add the greenroom layout around it. Moves the public repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` alongside. If run from *inside* the repo, the move renames the directory the user's shell is in; the script prints a stale-cwd note telling them to `cd <wrapper>` to re-sync (cosmetic, not data loss). Surface it.
 - **`/greenroom:sync [--wrapper <dir>] [--canonical <repo-dir>]`**: re-scan an existing wrapper and update the workspace, agent working-dir access, and repo map. Run it after dropping a new repo (a `-public-fork`, another clone) under the wrapper so it gets wired in. Detects the wrapper from cwd; works from inside any of the project's repos.
 
 `/greenroom:new` and `/greenroom:add` invoke the script's `new` and `retrofit` subcommands; both accept `--public-name` and `--private-name` overrides if the defaults don't fit, otherwise the canonical names are derived from the project name. `/greenroom:sync` invokes the `sync` subcommand. All three regenerate the workspace + wiring (see "VS Code workspace" below).

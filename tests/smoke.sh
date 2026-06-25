@@ -107,6 +107,27 @@ PY
 [ -z "$(find "$T/solo" -name '*.wrap-tmp')" ] || fail "failed move left a temp path"
 ok "failed in-place move restores the repo"
 
+# --- in-place wrap from INSIDE the repo warns about the now-stale shell cwd ---
+mkdir -p "$T/ipwarn"
+mkrepo "$T/ipwarn/inrepo"
+# the script prints resolved paths (macOS /var -> /private/var), so resolve here too
+RP="$( cd "$T/ipwarn/inrepo" && pwd -P )"
+out_ip="$( cd "$T/ipwarn/inrepo" && "$SCRIPT" retrofit 2>&1 )"
+echo "$out_ip" | grep -q "may look stale" || fail "in-place wrap from inside the repo did not warn about the stale shell cwd"
+echo "$out_ip" | grep -qF "cd $RP" || fail "stale-cwd note did not point at the wrapper to re-sync"
+# the new-wrapper branch (retrofit --name X, a different name) also moves the
+# repo out from under the shell, so it must warn too when run from inside
+mkrepo "$T/elsewarn/myrepo"
+RPE="$( cd "$T/elsewarn/myrepo" && pwd -P )"
+out_else="$( cd "$T/elsewarn/myrepo" && "$SCRIPT" retrofit --name otherproj 2>&1 )"
+echo "$out_else" | grep -q "may look stale" || fail "rename-from-inside (--name) did not warn about the stale shell cwd"
+echo "$out_else" | grep -qF "cd $(dirname "$RPE")/otherproj" || fail "rename-from-inside note did not point at the new wrapper"
+# a retrofit run with a path arg from OUTSIDE the repo must NOT warn (shell undisturbed)
+mkrepo "$T/ext/extrepo"
+out_ext="$( cd "$T" && "$SCRIPT" retrofit "$T/ext/extrepo" 2>&1 )"
+echo "$out_ext" | grep -q "may look stale" && fail "retrofit with a path arg from outside wrongly warned about a stale cwd"
+ok "in-place and rename-from-inside wraps warn about the stale shell cwd; a path-arg wrap from outside does not"
+
 # --- 4. check_plugin_configs matches only at a path-component boundary (bug #4) ---
 # The function scans ~/.claude/{settings.json,plugins/known_marketplaces.json},
 # so point HOME at a temp dir and assert /x/foo is NOT matched by /x/foobar.
