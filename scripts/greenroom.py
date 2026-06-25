@@ -906,6 +906,13 @@ def _looks_like_wrapper(parent: Path, project_name: str, src: Path) -> bool:
 
 
 def cmd_retrofit(args: argparse.Namespace) -> None:
+    # Capture the invoking shell's cwd before any move. If we do an in-place
+    # wrap, the dir the shell is sitting in gets renamed out from under it, so
+    # we warn at the end (the shell keeps a stale handle until it re-resolves).
+    try:
+        invoked_cwd = Path.cwd()
+    except OSError:
+        invoked_cwd = None
     src = Path(args.path).expanduser().resolve() if args.path else Path.cwd()
     if not src.is_dir():
         die(f"{src} is not a directory")
@@ -1060,6 +1067,20 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
             for f in flagged:
                 info(f"   {f}")
             info(f"   Replace '{src}' → '{public_path}' in those files to keep plugin commands working.")
+
+    # If the repo was moved (src != public_path: in-place or new-wrapper branch)
+    # and the invoking shell was sitting inside it, that shell now holds a stale
+    # handle to the moved contents (under <public>), so `ls`/`pwd` there look
+    # wrong until it re-resolves the path. Tell the user to re-sync; this is
+    # cosmetic, not data loss. (already_wrapped sets public_path == src: no move.)
+    if src != public_path and invoked_cwd is not None and (
+        invoked_cwd == src or src in invoked_cwd.parents
+    ):
+        info("")
+        info(f"Note: your shell's current directory ({invoked_cwd}) was moved into")
+        info(f"      {public_path}. The shell still points at the old location, so")
+        info( "      `ls`/`pwd` there may look stale. Re-sync it with:")
+        info(f"        cd {wrapper}")
 
 
 def cmd_new(args: argparse.Namespace) -> None:

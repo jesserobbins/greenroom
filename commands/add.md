@@ -32,6 +32,7 @@ Use this when the project needs a dedicated private dev checkout separate from t
 - Confirm the wrapper layout and that the public repo's git history + remote are intact.
 - Remind the user: the canonical launch is `cd <wrapper> && <your-agent>` (claude, codex, gemini, etc.). Every repo is then reachable and `AGENTS.md` loads automatically. The VS Code workspace's `Claude Code` task does the same from VS Code.
 - If a plugin-config warning printed, surface it prominently and tell the user the exact substitution to make in the named files.
+- **If a stale-cwd note printed** (an in-place wrap, i.e. they ran `add` from inside the repo), surface it: their interactive shell's `cd` still points at the moved directory, so `ls`/`pwd` there look stale until they re-run `cd <wrapper>`. This is cosmetic, not data loss; the layout is correct on disk.
 - Remind the user about external follow-ups: updating IDE workspaces or shell aliases that hardcoded the old path.
 - If the public repo's history already holds design docs or notes, mention `greenroom.py collect` (run from inside `<project>-public/`) to recover them into the private dir.
 - If they later add a fork or another clone under the wrapper, point them at `/greenroom:sync` to wire it into the workspace.
