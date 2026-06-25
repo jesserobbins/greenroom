@@ -128,6 +128,34 @@ out_ext="$( cd "$T" && "$SCRIPT" retrofit "$T/ext/extrepo" 2>&1 )"
 echo "$out_ext" | grep -q "may look stale" && fail "retrofit with a path arg from outside wrongly warned about a stale cwd"
 ok "in-place and rename-from-inside wraps warn about the stale shell cwd; a path-arg wrap from outside does not"
 
+# --- stale-cwd warning fires when the shell is in a SUBDIRECTORY of the wrapped repo
+#     (the `src in invoked_cwd.parents` branch), reached via an explicit path arg ---
+mkrepo "$T/subcase/subrepo"
+mkdir -p "$T/subcase/subrepo/deep/nested"
+RPS="$( cd "$T/subcase/subrepo" && pwd -P )"
+out_sub="$( cd "$T/subcase/subrepo/deep/nested" && "$SCRIPT" retrofit "$RPS" 2>&1 )"
+echo "$out_sub" | grep -q "may look stale" || fail "retrofit from a subdir of the repo did not warn about the stale shell cwd"
+ok "stale-cwd warning fires from a subdirectory of the wrapped repo"
+
+# --- the re-sync `cd` (and the gh repo-create --source) are shell-escaped, so a
+#     wrapper path with spaces yields a pasteable command (iter-1 codex L) ---
+mkrepo "$T/sp ace/has repo"
+out_sp="$( cd "$T/sp ace/has repo" && "$SCRIPT" retrofit 2>&1 )"
+echo "$out_sp" | grep -q "may look stale" || fail "spaced-path in-place wrap did not warn"
+# the cd line must be quoted/escaped so it pastes as one argument, not split on the
+# space: shlex.quote wraps a spaced path in single quotes, so the cd target begins
+# with a quote (no bare space between `cd ` and the path).
+echo "$out_sp" | grep -qE "cd '/.*/sp ace/has repo'" \
+  || fail "stale-cwd cd line is not shell-escaped for a path with spaces"
+# the gh repo-create offer must escape BOTH the --source path AND the repo spec
+# (the repo name `has repo-private` contains a space and would split when pasted)
+gh_line="$( echo "$out_sp" | grep 'gh repo create' )"
+echo "$gh_line" | grep -qE "source='/.*/sp ace/.*'" \
+  || fail "gh repo-create --source is not shell-escaped for a path with spaces"
+echo "$gh_line" | grep -qE "gh repo create '[^']*has repo-private'" \
+  || fail "gh repo-create repo spec is not shell-escaped (splits on the space when pasted)"
+ok "the re-sync cd and gh repo-create (spec + --source) are shell-escaped for paths with spaces"
+
 # --- 4. check_plugin_configs matches only at a path-component boundary (bug #4) ---
 # The function scans ~/.claude/{settings.json,plugins/known_marketplaces.json},
 # so point HOME at a temp dir and assert /x/foo is NOT matched by /x/foobar.
