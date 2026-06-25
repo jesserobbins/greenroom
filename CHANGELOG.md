@@ -5,6 +5,16 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.1.6-alpha] - 2026-06-25
+
+### Fixed
+- Every shell command greenroom prints for you to paste now quotes its path
+  arguments, so they stay valid when a wrapper, repo, or private-dir path
+  contains a space. Affects the stale-cwd `cd <wrapper>` hint, the
+  `gh repo create <owner>/<repo> --source=<path>` repo-creation offer, and
+  `collect`'s `git -C <private> status` follow-up. Previously a path like
+  `~/My Projects/foo` produced a command that split on the space when pasted.
+
 ## [0.1.5-alpha] - 2026-06-25
 
 ### Added
@@ -102,6 +112,7 @@ behavior may still change.
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
 [#3]: https://github.com/jesserobbins/greenroom/issues/3
 [#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.1.6-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.6-alpha
 [0.1.5-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.5-alpha
 [0.1.4-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.4-alpha
 [0.1.3-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.3-alpha
