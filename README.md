@@ -36,7 +36,7 @@ The parent folder has no `.git/` of its own. It's an organizational container, s
 /plugin install greenroom@jesserobbins
 ```
 
-That registers the skill and the `/greenroom-*` slash commands.
+That registers the skill and the `/greenroom:*` slash commands (`/greenroom:new`, `/greenroom:add`, `/greenroom:sync`).
 
 ### Manual (git clone)
 
@@ -113,7 +113,7 @@ As a safety net for a stray launch *inside* one repo, the script also writes a g
 
 ## Recovering docs already in public history
 
-If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo. The script path below assumes a manual `install.sh` install; on a plugin install the script lives under `~/.claude/plugins/` instead, so prefer the `/greenroom-*` slash commands or substitute that path:
+If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo. The script path below assumes a manual `install.sh` install; on a plugin install the script lives under `~/.claude/plugins/` instead, so prefer the `/greenroom:*` slash commands or substitute that path:
 
 ```
 cd <parent>/<project>-public
@@ -125,7 +125,7 @@ It scans two sources: files on the default branch that match private-shaped path
 
 ## Tests
 
-`tests/smoke.sh` builds throwaway repos in a temp dir and exercises the script's reliability-critical paths: retrofit when the parent already holds other repos, `collect` classification of files at the repo root, crash-safe restore when an in-place move fails, component-boundary matching in the plugin-config check, the full `sync` wiring (workspace, access, and map), the AGENTS.md core plus the Claude and Gemini adapters, and the `--with-private-fork` scaffold. A GitHub Actions workflow (`.github/workflows/ci.yml`) runs it on Linux and macOS once the repo is on GitHub.
+`tests/smoke.sh` builds throwaway repos in a temp dir and exercises the script's reliability-critical paths: retrofit when the parent already holds other repos, `collect` classification of files at the repo root, crash-safe restore when an in-place move fails, component-boundary matching in the plugin-config check, the full `sync` wiring (workspace, access, and map), the AGENTS.md core plus the Claude and Gemini adapters, and the `--with-private-fork` scaffold. It also covers the wrapper-safety guards: refusing `$HOME` and other forbidden roots as scaffold targets, the `GREENROOM_ROOT` boundary, the workspace sentinel, and the namespaced manual install. Run it directly:
 
 ```
 tests/smoke.sh
