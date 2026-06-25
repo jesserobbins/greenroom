@@ -5,6 +5,11 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.1.7-alpha] - 2026-06-25
+
+### Changed
+- The plugin and marketplace author/owner email is now `code@jesserobbins.com`.
+
 ## [0.1.6-alpha] - 2026-06-25
 
 ### Fixed
@@ -112,6 +117,7 @@ behavior may still change.
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
 [#3]: https://github.com/jesserobbins/greenroom/issues/3
 [#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.1.7-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.7-alpha
 [0.1.6-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.6-alpha
 [0.1.5-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.5-alpha
 [0.1.4-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.4-alpha
