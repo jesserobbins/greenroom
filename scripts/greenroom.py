@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -785,8 +786,12 @@ def print_repo_creation_offer(wrapper: Path, repos: list[str]) -> None:
     info("To create private GitHub repos for these (optional):")
     info("  (These are --private; nothing reaches GitHub without running these yourself.)")
     for r in candidates:
-        path = wrapper / r
-        info(f"  gh repo create {owner_label}/{r} --private --source={path} --remote=origin")
+        # Every interpolated token here is pasted into a shell, so quote them all:
+        # the repo dir name `r` (and thus the spec) can contain spaces, and the
+        # `<owner>` placeholder itself carries shell-significant angle brackets.
+        spec = shlex.quote(f"{owner_label}/{r}")
+        path = shlex.quote(str(wrapper / r))
+        info(f"  gh repo create {spec} --private --source={path} --remote=origin")
 
 
 def create_private_fork(wrapper: Path, public_dir_name: str, project_name: str) -> Optional[Path]:
@@ -1080,7 +1085,7 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
         info(f"Note: your shell's current directory ({invoked_cwd}) was moved into")
         info(f"      {public_path}. The shell still points at the old location, so")
         info( "      `ls`/`pwd` there may look stale. Re-sync it with:")
-        info(f"        cd {wrapper}")
+        info(f"        cd {shlex.quote(str(wrapper))}")
 
 
 def cmd_new(args: argparse.Namespace) -> None:
@@ -1508,7 +1513,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
 
     info("")
     info(f"copied {copied} file(s) into {private}; skipped {skipped}.")
-    info(f"review with `git -C {private} status`, then commit when ready.")
+    info(f"review with `git -C {shlex.quote(str(private))} status`, then commit when ready.")
 
 
 def build_parser() -> argparse.ArgumentParser:
