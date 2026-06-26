@@ -566,7 +566,9 @@ def write_greenroom_marker(wrapper: Path) -> Path:
     """
     path = wrapper / GREENROOM_MARKER
     if not path.exists():
-        path.write_text(json.dumps({"schema": 1}) + "\n")
+        # Explicit utf-8 to match _has_greenroom_marker's reader (writer/reader
+        # symmetry, regardless of the host's locale default encoding).
+        path.write_text(json.dumps({"schema": 1}) + "\n", encoding="utf-8")
     return path
 
 

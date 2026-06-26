@@ -910,9 +910,13 @@ nws="$T/nows/nowsproj/nowsproj.code-workspace"
 # only as conditional ("if ... present"/"if ... exists").
 nows_readme="$T/nows/nowsproj/README.md"
 grep -q 'cd nowsproj && <your-agent>' "$nows_readme" || fail "no-workspace README does not lead with wrapper-launch"
+# Negative pin: the old unconditional "Open it through <ws>" phrasing must be gone.
 grep -qE 'Open it through `nowsproj.code-workspace`' "$nows_readme" \
   && fail "no-workspace README unconditionally tells the user to open a workspace file that was not written"
-ok "a no-workspace wrapper's README leads with wrapper-launch, no unconditional workspace instruction"
+# Positive property: the workspace must be mentioned conditionally, so the test
+# also fails if the wording regresses to a differently-phrased unconditional open.
+grep -q 'is present' "$nows_readme" || fail "no-workspace README dropped the conditional ('if present') framing around the workspace file"
+ok "a no-workspace wrapper's README leads with wrapper-launch and frames the workspace conditionally"
 
 ok "workspace skipped when no VS Code family is detected (identity via .greenroom)"
 
