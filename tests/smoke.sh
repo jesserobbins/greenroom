@@ -183,7 +183,11 @@ mkdir -p "$T/multi"
 mkrepo "$T/multi/multi-public"
 mkrepo "$T/multi/multi-public-fork"
 mkrepo "$T/multi/multi-private"
-"$SCRIPT" sync --wrapper "$T/multi" >/dev/null
+# Force the workspace on first create so the contents/merge/launcher sub-tests
+# below have a file to inspect regardless of whether a VS Code-family editor is
+# on PATH (portable on a headless box). Once it exists, an existing
+# *.code-workspace is itself a detection signal, so later plain `sync`s refresh it.
+"$SCRIPT" sync --wrapper "$T/multi" --workspace >/dev/null
 ws="$T/multi/multi.code-workspace"
 [ -f "$ws" ] || fail "sync did not write the workspace file"
 if ! python3 - "$ws" <<'PY'
@@ -419,7 +423,8 @@ ok "migration: hand-edited CLAUDE.md is left untouched"
 
 # --- 13. --with-private-fork creates the fork, wires it, neutralizes public-side PR text ---
 mkdir -p "$T/forktest"
-out13="$("$SCRIPT" new forkproj --parent "$T/forktest" --init-public --with-private-fork 2>&1)"
+# --workspace so the fork-as-workspace-root assertion below is portable (no PATH probe needed).
+out13="$("$SCRIPT" new forkproj --parent "$T/forktest" --init-public --with-private-fork --workspace 2>&1)"
 fork_dir="$T/forktest/forkproj/forkproj-private-fork"
 [ -d "$fork_dir/.git" ] || fail "--with-private-fork: private-fork dir not created as a git repo"
 
@@ -695,11 +700,15 @@ ok "explicit --wrapper at \$HOME is refused and writes nothing"
 mkdir -p "$T/realwrap"
 mkrepo "$T/realwrap/realwrap-public"
 mkrepo "$T/realwrap/realwrap-private"
-( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null
+# --workspace forces the sentinel-bearing file so this test is about the sentinel,
+# not about whether an editor is on PATH.
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync --workspace ) >/dev/null
 grep -q '"greenroom"' "$T/realwrap"/*.code-workspace || fail "sync did not stamp the greenroom sentinel"
-# drop the -private sibling: the sentinel alone must keep it a wrapper on re-sync
+# Isolate the workspace sentinel as the SOLE signal: drop both the -private sibling
+# and the .greenroom marker, so only the sentinel can keep it a wrapper on re-sync.
 rm -rf "$T/realwrap/realwrap-private"
-( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+rm -f "$T/realwrap/.greenroom"
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync --workspace ) >/dev/null 2>&1 && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || fail "sentinel-only wrapper no longer recognized on re-sync"
 ok "greenroom sentinel workspace qualifies a wrapper on its own"
 
