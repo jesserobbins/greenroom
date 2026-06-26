@@ -162,6 +162,8 @@ def _ordered_folders(repos: list[str], canonical: Optional[str]) -> list[str]:
 
 CLAUDE_TASK_LABEL_PREFIX = "Claude Code ("
 
+GREENROOM_MARKER = ".greenroom"
+
 
 def _launcher_task(canonical: Optional[str]) -> dict:
     """The Tasks-based Claude launcher: cwd = the wrapper (the parent of the
@@ -524,6 +526,21 @@ def write_gemini_settings(wrapper: Path) -> tuple[Path, str]:
     return settings_path, status
 
 
+def write_greenroom_marker(wrapper: Path) -> Path:
+    """Write the editor-neutral wrapper identity marker, write-if-absent.
+
+    Existence is the signal; content is a schema version only. Never store repo
+    lists or the canonical name — they go stale and are derivable. Lives at the
+    non-git wrapper root, so (unlike .gemini/settings.json) it needs no
+    .git/info/exclude handling. An existing marker is left untouched so a future
+    schema bump is a deliberate migration, not an accidental overwrite.
+    """
+    path = wrapper / GREENROOM_MARKER
+    if not path.exists():
+        path.write_text(json.dumps({"schema": 1}) + "\n")
+    return path
+
+
 def migrate_claude_to_agents(
     wrapper: Path, project_name: str, canonical: Optional[str]
 ) -> Optional[tuple[Path, str]]:
@@ -640,6 +657,21 @@ def _is_forbidden_parent(d: Path) -> bool:
     return _is_always_forbidden(d)
 
 
+def _has_greenroom_marker(d: Path) -> bool:
+    """True if `d` holds a `.greenroom` marker with an int `schema` key.
+
+    Mirrors _has_greenroom_workspace's strictness: a stray, non-JSON, or
+    schema-less `.greenroom` (e.g. a file another tool happened to drop) does
+    not qualify d as a greenroom wrapper.
+    """
+    marker = d / GREENROOM_MARKER
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return False
+    return isinstance(data, dict) and isinstance(data.get("schema"), int)
+
+
 def _has_greenroom_workspace(d: Path) -> bool:
     """True if `d` holds a *.code-workspace carrying greenroom's sentinel.
 
@@ -665,8 +697,8 @@ def _is_project_wrapper(d: Path) -> bool:
 
     Guard against matching a generic clone parent like `~/GitHub` (which would
     grant `..` over the whole home dir and scan every repo). A real wrapper is a
-    non-repo dir holding git repos *and* carrying a wrapper signal: a
-    greenroom-authored `*.code-workspace`, or a `*-private` repo sibling.
+    non-repo dir holding git repos *and* carrying a wrapper signal: a `.greenroom`
+    marker, a greenroom-authored `*.code-workspace`, or a `*-private` repo sibling.
     """
     if _is_forbidden_root(d):
         return False
@@ -675,6 +707,8 @@ def _is_project_wrapper(d: Path) -> bool:
     repos = discover_repos(d)
     if not repos:
         return False
+    if _has_greenroom_marker(d):
+        return True
     if _has_greenroom_workspace(d):
         return True
     return any(r.endswith("-private") for r in repos)
@@ -1046,6 +1080,7 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
     claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
+    write_greenroom_marker(wrapper)  # editor-neutral wrapper identity
 
     info("")
     info(f"wrapped {project_name}:")
@@ -1141,6 +1176,7 @@ def cmd_new(args: argparse.Namespace) -> None:
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
     claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
+    write_greenroom_marker(wrapper)  # editor-neutral wrapper identity
 
     info("")
     info(f"created {project_name}:")
@@ -1200,6 +1236,7 @@ def cmd_sync(args: argparse.Namespace) -> None:
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
     claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
+    write_greenroom_marker(wrapper)  # editor-neutral wrapper identity
 
     info("")
     info(f"synced {project_name}:")

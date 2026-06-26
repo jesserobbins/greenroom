@@ -854,4 +854,37 @@ echo "$out4" | grep -q "SKIP script-root" || fail "install.sh did not SKIP a rea
 [ -L "$fh/.claude/skills/greenroom-setup" ] || fail "install.sh did not still link the skill after the script-root SKIP"
 ok "a real file at the script-root path is SKIPped and the rest of the install proceeds"
 
+# --- 37. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+mkdir -p "$T/mark"
+"$SCRIPT" new markproj --parent "$T/mark" >/dev/null
+gm="$T/mark/markproj/.greenroom"
+[ -f "$gm" ] || fail "new did not write the .greenroom marker"
+python3 - "$gm" <<'PY' || fail ".greenroom is not {\"schema\": <int>}"
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert isinstance(d.get("schema"), int), d
+assert "folders" not in d and "repos" not in d and "canonical" not in d, "marker must be minimal"
+PY
+ok "new writes a minimal .greenroom marker"
+
+# sync adds .greenroom to a pre-marker wrapper (simulate by deleting it).
+# `new` with no --init-public/--clone leaves the public dir uncreated, so detect
+# the wrapper from the always-present private repo instead.
+rm -f "$gm"
+( cd "$T/mark/markproj/markproj-private" && "$SCRIPT" sync ) >/dev/null
+[ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
+ok "sync adds .greenroom to a wrapper that lacks it"
+
+# --- 38. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+fhm="$T/markforbid"
+mkdir -p "$fhm"
+mkrepo "$fhm/repo-public"
+mkrepo "$fhm/repo-private"
+echo '{"schema": 1}' > "$fhm/.greenroom"
+# point HOME at the forbidden dir so _is_forbidden_root($HOME) fires on the walk-up
+HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "a stray .greenroom in \$HOME wrongly qualified it as a wrapper"
+[ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
+ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
+
 echo "all $pass checks passed"
