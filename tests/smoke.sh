@@ -887,4 +887,34 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
+# --- 39. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
+# .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
+mkdir -p "$T/nows"
+GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new nowsproj --parent "$T/nows" --init-public >/dev/null
+nws="$T/nows/nowsproj/nowsproj.code-workspace"
+[ ! -f "$nws" ] || fail "workspace was written despite no VS Code signal"
+[ -f "$T/nows/nowsproj/.greenroom" ] || fail "marker missing — wrapper identity must not depend on the workspace"
+ok "workspace skipped when no VS Code family is detected (identity via .greenroom)"
+
+# --workspace forces the file even with no editor detected
+( cd "$T/nows/nowsproj/nowsproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync --workspace ) >/dev/null
+[ -f "$nws" ] || fail "--workspace did not force the workspace file"
+ok "--workspace forces the workspace file regardless of detection"
+
+# --no-workspace runs cleanly and does not delete an existing user workspace file
+( cd "$T/nows/nowsproj/nowsproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync --no-workspace ) >/dev/null
+[ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
+ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
+
+# --- 40. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+mkdir -p "$T/vscode"
+GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
+vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
+[ ! -f "$vws" ] || fail "setup: workspace should have been skipped before .vscode/ existed"
+mkdir -p "$T/vscode/vscodeproj/.vscode"
+( cd "$T/vscode/vscodeproj/vscodeproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync ) >/dev/null
+[ -f "$vws" ] || fail "a present .vscode/ dir did not trigger the workspace write"
+ok "detection writes the workspace when .vscode/ exists even with no family binary"
+
 echo "all $pass checks passed"

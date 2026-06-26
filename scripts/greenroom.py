@@ -212,6 +212,32 @@ def _merge_launcher(existing: dict, task: dict) -> None:
     tlist.append(task)
 
 
+_VSCODE_FAMILY = ("code", "cursor", "codium", "windsurf")
+
+
+def _vscode_family_detected(wrapper: Path) -> bool:
+    """True if a VS-Code-family editor is plausibly in use here.
+
+    Signals: a family binary on PATH, an existing `.vscode/` dir, or an existing
+    `*.code-workspace` in the wrapper. GREENROOM_TEST_NO_EDITOR forces the PATH
+    probe to find nothing (test-only determinism; the file-presence signals still
+    apply).
+    """
+    if not os.environ.get("GREENROOM_TEST_NO_EDITOR"):
+        if any(shutil.which(b) for b in _VSCODE_FAMILY):
+            return True
+    if (wrapper / ".vscode").is_dir():
+        return True
+    return any(wrapper.glob("*.code-workspace"))
+
+
+def should_write_workspace(wrapper: Path, flag: Optional[bool]) -> bool:
+    """Resolve flag-or-detection. flag True/False forces; None → detect."""
+    if flag is not None:
+        return flag
+    return _vscode_family_detected(wrapper)
+
+
 def write_code_workspace(
     wrapper: Path, project_name: str, repos: list[str], canonical: Optional[str]
 ) -> Path:
@@ -1073,7 +1099,10 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
 
     repos = discover_repos(wrapper)
     canonical = choose_canonical(repos, known_public=public_dir_name)
-    workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    if should_write_workspace(wrapper, getattr(args, "workspace", None)):
+        workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    else:
+        workspace_path = None
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
     write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
@@ -1089,7 +1118,10 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
     info(f"  private:    {private_path}")
     if fork_path:
         info(f"  private-fork: {fork_path} (cloned from {public_dir_name}, remote 'upstream')")
-    info(f"  workspace:  {workspace_path}")
+    if workspace_path is not None:
+        info(f"  workspace:  {workspace_path}")
+    else:
+        info("  workspace:  (skipped — no editor detected; run with --workspace to add one)")
     if grant_paths:
         info(f"  access:     {len(grant_paths)} repo(s) granted their siblings")
     info(f"  map:        {readme_path} ({readme_state})")
@@ -1169,7 +1201,10 @@ def cmd_new(args: argparse.Namespace) -> None:
     canonical = choose_canonical(
         repos, known_public=public_dir_name if public_path.is_dir() else None
     )
-    workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    if should_write_workspace(wrapper, getattr(args, "workspace", None)):
+        workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    else:
+        workspace_path = None
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
     write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
@@ -1185,7 +1220,10 @@ def cmd_new(args: argparse.Namespace) -> None:
     info(f"  private:    {private_path}")
     if fork_path:
         info(f"  private-fork: {fork_path} (cloned from {public_dir_name}, remote 'upstream')")
-    info(f"  workspace:  {workspace_path}")
+    if workspace_path is not None:
+        info(f"  workspace:  {workspace_path}")
+    else:
+        info("  workspace:  (skipped — no editor detected; run with --workspace to add one)")
     if grant_paths:
         info(f"  access:     {len(grant_paths)} repo(s) granted their siblings")
     info(f"  map:        {readme_path} ({readme_state})")
@@ -1229,7 +1267,10 @@ def cmd_sync(args: argparse.Namespace) -> None:
 
     migrate_claude_to_agents(wrapper, project_name, canonical)  # legacy layout migration
 
-    workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    if should_write_workspace(wrapper, getattr(args, "workspace", None)):
+        workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    else:
+        workspace_path = None
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
     write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
@@ -1243,7 +1284,10 @@ def cmd_sync(args: argparse.Namespace) -> None:
     info(f"  wrapper:    {wrapper}")
     info(f"  repos:      {', '.join(repos)}")
     info(f"  canonical:  {canonical}")
-    info(f"  workspace:  {workspace_path}")
+    if workspace_path is not None:
+        info(f"  workspace:  {workspace_path}")
+    else:
+        info("  workspace:  (skipped — no editor detected; run with --workspace to add one)")
     if grant_paths:
         info(f"  access:     {len(grant_paths)} repo(s) granted their siblings")
     info(f"  map:        {readme_path} ({readme_state})")
@@ -1553,6 +1597,19 @@ def cmd_collect(args: argparse.Namespace) -> None:
     info(f"review with `git -C {shlex.quote(str(private))} status`, then commit when ready.")
 
 
+def _add_workspace_flags(p: argparse.ArgumentParser) -> None:
+    """Tri-state --workspace / --no-workspace (default None → detect).
+
+    Shared by new/retrofit/sync: --workspace forces the .code-workspace write,
+    --no-workspace skips it, neither lets should_write_workspace detect.
+    """
+    ws = p.add_mutually_exclusive_group()
+    ws.add_argument("--workspace", dest="workspace", action="store_true", default=None,
+                    help="Force-write the VS Code .code-workspace file")
+    ws.add_argument("--no-workspace", dest="workspace", action="store_false",
+                    help="Never write the .code-workspace file")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="greenroom",
@@ -1586,6 +1643,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Clone <project>-public into <project>-private-fork (local 'upstream' remote, no origin)",
     )
+    _add_workspace_flags(p_retro)
     p_retro.set_defaults(func=cmd_retrofit)
 
     p_new = sub.add_parser(
@@ -1619,6 +1677,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Clone <project>-public into <project>-private-fork (local 'upstream' remote, no origin)",
     )
+    _add_workspace_flags(p_new)
     p_new.set_defaults(func=cmd_new)
 
     p_collect = sub.add_parser(
@@ -1657,6 +1716,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync.add_argument("--wrapper", help="Wrapper dir (default: detect from cwd)")
     p_sync.add_argument("--name", help="Project name (default: wrapper basename)")
     p_sync.add_argument("--canonical", help="Canonical repo dir name (default: prefer a *-public repo)")
+    _add_workspace_flags(p_sync)
     p_sync.set_defaults(func=cmd_sync)
 
     return parser
