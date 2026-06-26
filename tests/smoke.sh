@@ -904,6 +904,16 @@ GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new nowsproj --parent "$T/nows" --init-publ
 nws="$T/nows/nowsproj/nowsproj.code-workspace"
 [ ! -f "$nws" ] || fail "workspace was written despite no VS Code signal"
 [ -f "$T/nows/nowsproj/.greenroom" ] || fail "marker missing — wrapper identity must not depend on the workspace"
+# iter-1 codex L: the generated README of a no-workspace wrapper must not give an
+# unconditional "Open it through <project>.code-workspace" instruction for a file
+# that was never written. It leads with wrapper-launch and mentions the workspace
+# only as conditional ("if ... present"/"if ... exists").
+nows_readme="$T/nows/nowsproj/README.md"
+grep -q 'cd nowsproj && <your-agent>' "$nows_readme" || fail "no-workspace README does not lead with wrapper-launch"
+grep -qE 'Open it through `nowsproj.code-workspace`' "$nows_readme" \
+  && fail "no-workspace README unconditionally tells the user to open a workspace file that was not written"
+ok "a no-workspace wrapper's README leads with wrapper-launch, no unconditional workspace instruction"
+
 ok "workspace skipped when no VS Code family is detected (identity via .greenroom)"
 
 # --workspace forces the file even with no editor detected

@@ -434,16 +434,19 @@ def _readme_block(project_name: str, repos: list[str], canonical: Optional[str])
         "",
         f"## {project_name} workspace map",
         "",
-        f"Multi-repo project. Open it through `{project_name}.code-workspace`, "
-        "never `Open Folder` on this directory or a single repo.",
+        "Multi-repo project. Launch your agent at this wrapper directory; never "
+        "`Open Folder` on a single repo. If a "
+        f"`{project_name}.code-workspace` is present (written when a VS Code-family "
+        "editor is detected), open it instead of `Open Folder` on the wrapper.",
         "",
     ]
     if canonical:
         lines += [
             f"**Launch home:** this wrapper directory. From any terminal: `cd {project_name} && <your-agent>` "
             "(claude, codex, gemini, and so on). That keeps session history and memory in one bucket and gives "
-            "the session every child repo with no extra wiring. VS Code users can run the "
-            f"`Claude Code ({canonical})` task or open `{project_name}.code-workspace`. After adding a new "
+            "the session every child repo with no extra wiring. If a "
+            f"`{project_name}.code-workspace` exists, VS Code-family users can open it or run the "
+            f"`Claude Code ({canonical})` task. After adding a new "
             "repo under this wrapper, run `/greenroom:sync` (or `scripts/greenroom.py sync`) to wire it in.",
             "",
         ]
