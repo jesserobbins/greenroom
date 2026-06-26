@@ -18,7 +18,7 @@ The script will:
 - Refuse if the public repo has uncommitted changes (the user should commit or stash first).
 - Move the existing repo into a new `<wrapper>/<project>-public/` directory, preserving git history and the origin remote. The wrapper takes the project's name; the repo's existing parent dir (e.g. `~/src`) stays as the parent, and sibling repos there are untouched.
 - Scaffold `<wrapper>/<project>-private/` with a fresh git repo, an `AGENTS.md` with conventions for agents (plus a `CLAUDE.md` pointer for Claude Code), and `docs/notes/drafts/reviews/research/` subdirs.
-- Write a `<project>.code-workspace` file at the wrapper root (the canonical entry point for editor work) listing every repo under the wrapper as a root, plus wrapper and per-repo `AGENTS.md` files, `<public>/.claude/settings.local.json` (Claude sibling-repo safety-net grant; git-excluded), `.gemini/settings.json` (Gemini adapter; git-excluded), and a wrapper `README.md` repo map.
+- Write a `.greenroom` identity marker at the wrapper root, plus wrapper and per-repo `AGENTS.md` files, `<public>/.claude/settings.local.json` (Claude sibling-repo safety-net grant; git-excluded), `.gemini/settings.json` (Gemini adapter; git-excluded), and a wrapper `README.md` repo map. When a VS Code-family editor is detected (or with `--workspace`), it also writes a `<project>.code-workspace` listing every repo under the wrapper as a root; otherwise that file is skipped.
 - Detect any Claude Code plugin configs that point at the old path and tell the user exactly which files need updating (it does not auto-edit those -- they are agent config and the user owns them).
 
 ## `--with-private-fork`
@@ -30,7 +30,7 @@ Use this when the project needs a dedicated private dev checkout separate from t
 ## After the script runs
 
 - Confirm the wrapper layout and that the public repo's git history + remote are intact.
-- Remind the user: the canonical launch is `cd <wrapper> && <your-agent>` (claude, codex, gemini, etc.). Every repo is then reachable and `AGENTS.md` loads automatically. The VS Code workspace's `Claude Code` task does the same from VS Code.
+- Remind the user: the canonical launch is `cd <wrapper> && <your-agent>` (claude, codex, gemini, etc.). Every repo is then reachable and `AGENTS.md` loads automatically. If a `<project>.code-workspace` was written (VS Code family detected), its `Claude Code` task does the same from VS Code.
 - If a plugin-config warning printed, surface it prominently and tell the user the exact substitution to make in the named files.
 - **If a stale-cwd note printed** (an in-place wrap, i.e. they ran `add` from inside the repo), surface it: their interactive shell's `cd` still points at the moved directory, so `ls`/`pwd` there look stale until they re-run `cd <wrapper>`. This is cosmetic, not data loss; the layout is correct on disk.
 - Remind the user about external follow-ups: updating IDE workspaces or shell aliases that hardcoded the old path.

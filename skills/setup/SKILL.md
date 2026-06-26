@@ -18,7 +18,8 @@ A per-project layout: a parent folder per project holding two sibling git repos.
 ├── AGENTS.md                        # wrapper orientation: read by any agent at launch
 ├── CLAUDE.md                        # Claude adapter: exactly "@AGENTS.md"
 ├── README.md                        # repo map for humans and agents (auto-managed by sync)
-├── <project>.code-workspace         # canonical editor entry point
+├── .greenroom                       # editor-neutral wrapper identity marker ({"schema": 1})
+├── <project>.code-workspace         # VS Code entry point — written only when a VS Code-family editor is detected
 ├── .gemini/settings.json            # Gemini adapter: sets context.fileName to AGENTS.md (git-excluded)
 ├── <project>-public/                # public code repo (the thing on GitHub: the stage)
 │   ├── AGENTS.md                    # your own, if any: greenroom does not create this
@@ -54,9 +55,11 @@ Agents that read `AGENTS.md` natively need no extra config. Two adapters wire th
 
 **Access for all agents comes from wrapper-launch.** When an agent starts at the wrapper, every child repo is under cwd and reachable. The per-agent grant files are safety nets only, for a stray launch inside a single repo. The neutral core writes no access config; only the Claude and Gemini adapters write theirs.
 
-The private dir is named `<project>-private/` (not just `private/`) so tools that infer project identity from the directory name (git remotes, agent session reporting, IDE workspace labels) see a unique, project-scoped name. Legacy projects with a plain `private/` dir keep working: the script and `collect` subcommand recognize both names. Migrate by renaming the directory and updating the `<project>.code-workspace` file (folder name + path).
+**No per-editor config beyond these.** greenroom generates nothing editor-specific apart from the (conditional) VS Code workspace and the Gemini pointer. Every other editor — Zed, JetBrains, Helix, vim, Cursor, Aider, and the rest — reads `AGENTS.md` natively and reaches both repos from the wrapper cwd, so there is no `.idea/`, `.zed/`, or similar to write. The bar for a generated per-editor file is "the editor can't otherwise find its instructions or open both repos"; only Gemini cleared it (it needed a pointer to `AGENTS.md`).
 
-A VS Code multi-root workspace file (`<project>.code-workspace`) sits at the wrapper root and is the canonical entry point for editor work. See "VS Code workspace" below.
+The private dir is named `<project>-private/` (not just `private/`) so tools that infer project identity from the directory name (git remotes, agent session reporting, IDE workspace labels) see a unique, project-scoped name. Legacy projects with a plain `private/` dir keep working: the script and `collect` subcommand recognize both names. Migrate by renaming the directory and (if a `<project>.code-workspace` exists) updating its folder name and path.
+
+When a VS Code-family editor is detected, a multi-root workspace file (`<project>.code-workspace`) is written at the wrapper root as the VS Code entry point. Wrapper identity, though, lives in the editor-neutral `.greenroom` marker — not the workspace file — so a terminal-only setup is a complete, recognized wrapper with no workspace at all. See "VS Code workspace" below.
 
 ## Slash commands
 
@@ -64,7 +67,7 @@ A VS Code multi-root workspace file (`<project>.code-workspace`) sits at the wra
 - **`/greenroom:add <path-to-existing-public-repo>`**: take an existing public repo (e.g. `~/src/foo/`) and add the greenroom layout around it. Moves the public repo into a new parent folder as `<name>-public/` and scaffolds `<name>-private/` alongside. If run from *inside* the repo, the move renames the directory the user's shell is in; the script prints a stale-cwd note telling them to `cd <wrapper>` to re-sync (cosmetic, not data loss). Surface it.
 - **`/greenroom:sync [--wrapper <dir>] [--canonical <repo-dir>]`**: re-scan an existing wrapper and update the workspace, agent working-dir access, and repo map. Run it after dropping a new repo (a `-public-fork`, another clone) under the wrapper so it gets wired in. Detects the wrapper from cwd; works from inside any of the project's repos.
 
-`/greenroom:new` and `/greenroom:add` invoke the script's `new` and `retrofit` subcommands; both accept `--public-name` and `--private-name` overrides if the defaults don't fit, otherwise the canonical names are derived from the project name. `/greenroom:sync` invokes the `sync` subcommand. All three regenerate the workspace + wiring (see "VS Code workspace" below).
+`/greenroom:new` and `/greenroom:add` invoke the script's `new` and `retrofit` subcommands; both accept `--public-name` and `--private-name` overrides if the defaults don't fit, otherwise the canonical names are derived from the project name. `/greenroom:sync` invokes the `sync` subcommand. All three regenerate the agent wiring and the `.greenroom` marker, and refresh the VS Code workspace when one is warranted (see "VS Code workspace" below); all three accept `--workspace` / `--no-workspace`.
 
 The command definitions are vendored in `commands/` and symlinked into `~/.claude/commands/` by the repo's `install.sh`, so they stay versioned alongside the skill rather than drifting as loose user-config files.
 
@@ -132,11 +135,11 @@ The `<project>-private/AGENTS.md` written by the script tells any agent working 
 - **Working tree dirty**: refuses to retrofit if the public repo has uncommitted changes. Commit or stash first.
 - **Parent already exists and non-empty**: refuses to overwrite. Manual cleanup required.
 - **Idempotent re-runs**: if the source path is already inside its target parent structure, the script detects this and only adds the missing private dir (does not double-create). Recognizes both the canonical `<project>-private/` and legacy `private/` as already-existing.
-- **Legacy `private/` dir**: if a wrapper already has a plain `private/` (from before the rename), retrofit leaves it where it is and prints a hint to rename it. To migrate, rename the directory (`mv private <project>-private`) and update the folder name and path in `<project>.code-workspace`.
+- **Legacy `private/` dir**: if a wrapper already has a plain `private/` (from before the rename), retrofit leaves it where it is and prints a hint to rename it. To migrate, rename the directory (`mv private <project>-private`) and, if a `<project>.code-workspace` exists, update the folder name and path in it.
 
 ## VS Code workspace
 
-Every entry point (`new`, `retrofit`, `sync`) writes/refreshes a `<project>.code-workspace` file at the wrapper root. It's the canonical entry point for editor work. Never use `Open Folder` on the wrapper or on a repo directly.
+Each entry point (`new`, `retrofit`, `sync`) writes/refreshes a `<project>.code-workspace` file at the wrapper root **when a VS Code-family editor is detected** — `code`, `cursor`, `codium`/`vscodium`, or `windsurf` on `PATH`, or an existing `.vscode/` or `*.code-workspace` in the wrapper. Otherwise the file is skipped (a terminal-only user gets none) and the command prints a one-line hint. Force the write with `--workspace` or suppress it with `--no-workspace`; both flags work on all three commands. When the file is present, it's the VS Code entry point — never use `Open Folder` on the wrapper or on a repo directly. Note this file is no longer what *identifies* a wrapper; the `.greenroom` marker does that.
 
 **Auto-discovery.** The `folders` array is built by scanning the wrapper for git repos. Every immediate subdirectory containing `.git/` becomes a root, canonical first, the rest alphabetical. So a `-public-fork`, a `-private-fork`, or any other clone dropped under the wrapper shows up as its own root (with its own Source Control panel) on the next `sync`. Canonical = the `-public` repo (a `-public-fork` is the fallback); override with `--canonical`.
 
@@ -166,8 +169,8 @@ The wrapper-root `README.md` carries an auto-managed map (inside `<!-- greenroom
 
 How to open the project (every time):
 
-1. From VS Code: `File → Open Workspace from File…` → `<wrapper>/<project>.code-workspace`. Or from terminal: `code <wrapper>/<project>.code-workspace`. Subsequent launches: pick `<project> (Workspace)` from "Recent."
-2. Run the **`Claude Code (<canonical>)`** task (or open a terminal, which lands at the wrapper, and run `claude`, `codex`, `gemini`, or whichever agent you use). Session history goes to a single bucket; all child repos are reachable; each repo's `AGENTS.md` loads lazily.
+1. From any terminal: `cd <wrapper> && <your-agent>` (`claude`, `codex`, `gemini`, or whichever you use). This is the universal entry point — it works in any editor or none. Session history goes to a single bucket; all child repos are reachable; each repo's `AGENTS.md` loads lazily.
+2. If a `<project>.code-workspace` was written (VS Code-family editor detected), VS Code users can instead open it via `File → Open Workspace from File…` → `<wrapper>/<project>.code-workspace` (or `code <wrapper>/<project>.code-workspace` from a terminal; subsequent launches: pick `<project> (Workspace)` from "Recent"), then run the **`Claude Code (<canonical>)`** task.
 
 ## Aftercare checklist
 
@@ -181,6 +184,6 @@ After running the script, the model should remind the user to:
    gh repo create <your-account>/<project>-private --private --source=. --remote=origin
    git push -u origin main
    ```
-3. **Open VS Code via the new `<project>.code-workspace` file** (not via `Open Folder` on the wrapper or either repo). If a previous VS Code window had the old layout open, close it first.
+3. **Launch at the new wrapper** (`cd <wrapper> && <your-agent>`), not inside either repo. If a `<project>.code-workspace` was written (VS Code-family editor detected), open the project through it rather than `Open Folder` on the wrapper or a repo; if a previous VS Code window had the old layout open, close it first.
 4. **Update shell aliases** that hardcoded the old `~/src/<name>/` path (now the parent folder, not the repo).
 5. **One-time global hygiene** (only if not already done): add `.notes`, `NOTES.md`, `SCRATCH.md`, `*.private.md`, `.private/` to `~/.config/git/ignore` so private-flavored filenames can't accidentally land in public repos from a fresh clone.

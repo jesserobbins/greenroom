@@ -22,7 +22,7 @@ Use this when the project needs a dedicated private dev checkout separate from t
 
 ## After the script runs
 
-- Summarize the wrapper folder, public repo path, private repo path, and (if created) the private-fork path, plus the `<project>.code-workspace`, wrapper `AGENTS.md` and per-repo `AGENTS.md` files (plus `CLAUDE.md` pointers and `.gemini/settings.json` adapters), the canonical repo's `.claude/settings.local.json` (Claude sibling-repo safety-net grant), and the wrapper `README.md` repo map.
+- Summarize the wrapper folder, public repo path, private repo path, and (if created) the private-fork path, plus the `.greenroom` identity marker, the `<project>.code-workspace` (written only when a VS Code-family editor is detected, or with `--workspace`), wrapper `AGENTS.md` and per-repo `AGENTS.md` files (plus `CLAUDE.md` pointers and `.gemini/settings.json` adapters), the canonical repo's `.claude/settings.local.json` (Claude sibling-repo safety-net grant), and the wrapper `README.md` repo map.
 - Remind the user: the canonical launch is `cd <wrapper> && <your-agent>`. Every repo is then reachable and `AGENTS.md` loads automatically.
 - If the script printed a plugin-config warning, surface it prominently. That's the user's manual step.
 - If they later add a fork or another clone under the wrapper, point them at `/greenroom:sync` to wire it into the workspace.

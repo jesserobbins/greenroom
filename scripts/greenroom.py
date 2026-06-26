@@ -162,6 +162,8 @@ def _ordered_folders(repos: list[str], canonical: Optional[str]) -> list[str]:
 
 CLAUDE_TASK_LABEL_PREFIX = "Claude Code ("
 
+GREENROOM_MARKER = ".greenroom"
+
 
 def _launcher_task(canonical: Optional[str]) -> dict:
     """The Tasks-based Claude launcher: cwd = the wrapper (the parent of the
@@ -208,6 +210,32 @@ def _merge_launcher(existing: dict, task: dict) -> None:
         if not (isinstance(t, dict) and str(t.get("label", "")).startswith(CLAUDE_TASK_LABEL_PREFIX))
     ]
     tlist.append(task)
+
+
+_VSCODE_FAMILY = ("code", "cursor", "codium", "vscodium", "windsurf")
+
+
+def _vscode_family_detected(wrapper: Path) -> bool:
+    """True if a VS-Code-family editor is plausibly in use here.
+
+    Signals: a family binary on PATH, an existing `.vscode/` dir, or an existing
+    `*.code-workspace` in the wrapper. GREENROOM_TEST_NO_EDITOR forces the PATH
+    probe to find nothing (test-only determinism; the file-presence signals still
+    apply).
+    """
+    if not os.environ.get("GREENROOM_TEST_NO_EDITOR"):
+        if any(shutil.which(b) for b in _VSCODE_FAMILY):
+            return True
+    if (wrapper / ".vscode").is_dir():
+        return True
+    return any(wrapper.glob("*.code-workspace"))
+
+
+def should_write_workspace(wrapper: Path, flag: Optional[bool]) -> bool:
+    """Resolve flag-or-detection. flag True/False forces; None → detect."""
+    if flag is not None:
+        return flag
+    return _vscode_family_detected(wrapper)
 
 
 def write_code_workspace(
@@ -406,16 +434,19 @@ def _readme_block(project_name: str, repos: list[str], canonical: Optional[str])
         "",
         f"## {project_name} workspace map",
         "",
-        f"Multi-repo project. Open it through `{project_name}.code-workspace`, "
-        "never `Open Folder` on this directory or a single repo.",
+        "Multi-repo project. Launch your agent at this wrapper directory; never "
+        "`Open Folder` on a single repo. If a "
+        f"`{project_name}.code-workspace` is present (written when a VS Code-family "
+        "editor is detected), open it instead of `Open Folder` on the wrapper.",
         "",
     ]
     if canonical:
         lines += [
             f"**Launch home:** this wrapper directory. From any terminal: `cd {project_name} && <your-agent>` "
             "(claude, codex, gemini, and so on). That keeps session history and memory in one bucket and gives "
-            "the session every child repo with no extra wiring. VS Code users can run the "
-            f"`Claude Code ({canonical})` task or open `{project_name}.code-workspace`. After adding a new "
+            "the session every child repo with no extra wiring. If a "
+            f"`{project_name}.code-workspace` exists, VS Code-family users can open it or run the "
+            f"`Claude Code ({canonical})` task. After adding a new "
             "repo under this wrapper, run `/greenroom:sync` (or `scripts/greenroom.py sync`) to wire it in.",
             "",
         ]
@@ -522,6 +553,23 @@ def write_gemini_settings(wrapper: Path) -> tuple[Path, str]:
     settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     _exclude_locally(wrapper, ".gemini/settings.json")
     return settings_path, status
+
+
+def write_greenroom_marker(wrapper: Path) -> Path:
+    """Write the editor-neutral wrapper identity marker, write-if-absent.
+
+    Existence is the signal; content is a schema version only. Never store repo
+    lists or the canonical name — they go stale and are derivable. Lives at the
+    non-git wrapper root, so (unlike .gemini/settings.json) it needs no
+    .git/info/exclude handling. An existing marker is left untouched so a future
+    schema bump is a deliberate migration, not an accidental overwrite.
+    """
+    path = wrapper / GREENROOM_MARKER
+    if not path.exists():
+        # Explicit utf-8 to match _has_greenroom_marker's reader (writer/reader
+        # symmetry, regardless of the host's locale default encoding).
+        path.write_text(json.dumps({"schema": 1}) + "\n", encoding="utf-8")
+    return path
 
 
 def migrate_claude_to_agents(
@@ -640,6 +688,21 @@ def _is_forbidden_parent(d: Path) -> bool:
     return _is_always_forbidden(d)
 
 
+def _has_greenroom_marker(d: Path) -> bool:
+    """True if `d` holds a `.greenroom` marker with an int `schema` key.
+
+    Mirrors _has_greenroom_workspace's strictness: a stray, non-JSON, or
+    schema-less `.greenroom` (e.g. a file another tool happened to drop) does
+    not qualify d as a greenroom wrapper.
+    """
+    marker = d / GREENROOM_MARKER
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return False
+    return isinstance(data, dict) and isinstance(data.get("schema"), int)
+
+
 def _has_greenroom_workspace(d: Path) -> bool:
     """True if `d` holds a *.code-workspace carrying greenroom's sentinel.
 
@@ -665,8 +728,8 @@ def _is_project_wrapper(d: Path) -> bool:
 
     Guard against matching a generic clone parent like `~/GitHub` (which would
     grant `..` over the whole home dir and scan every repo). A real wrapper is a
-    non-repo dir holding git repos *and* carrying a wrapper signal: a
-    greenroom-authored `*.code-workspace`, or a `*-private` repo sibling.
+    non-repo dir holding git repos *and* carrying a wrapper signal: a `.greenroom`
+    marker, a greenroom-authored `*.code-workspace`, or a `*-private` repo sibling.
     """
     if _is_forbidden_root(d):
         return False
@@ -675,6 +738,8 @@ def _is_project_wrapper(d: Path) -> bool:
     repos = discover_repos(d)
     if not repos:
         return False
+    if _has_greenroom_marker(d):
+        return True
     if _has_greenroom_workspace(d):
         return True
     return any(r.endswith("-private") for r in repos)
@@ -1039,13 +1104,17 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
 
     repos = discover_repos(wrapper)
     canonical = choose_canonical(repos, known_public=public_dir_name)
-    workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    if should_write_workspace(wrapper, getattr(args, "workspace", None)):
+        workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    else:
+        workspace_path = None
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
     write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
     claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
+    write_greenroom_marker(wrapper)  # editor-neutral wrapper identity
 
     info("")
     info(f"wrapped {project_name}:")
@@ -1054,7 +1123,10 @@ def cmd_retrofit(args: argparse.Namespace) -> None:
     info(f"  private:    {private_path}")
     if fork_path:
         info(f"  private-fork: {fork_path} (cloned from {public_dir_name}, remote 'upstream')")
-    info(f"  workspace:  {workspace_path}")
+    if workspace_path is not None:
+        info(f"  workspace:  {workspace_path}")
+    else:
+        info("  workspace:  (skipped — no editor detected; run with --workspace to add one)")
     if grant_paths:
         info(f"  access:     {len(grant_paths)} repo(s) granted their siblings")
     info(f"  map:        {readme_path} ({readme_state})")
@@ -1134,13 +1206,17 @@ def cmd_new(args: argparse.Namespace) -> None:
     canonical = choose_canonical(
         repos, known_public=public_dir_name if public_path.is_dir() else None
     )
-    workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    if should_write_workspace(wrapper, getattr(args, "workspace", None)):
+        workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    else:
+        workspace_path = None
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
     write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
     claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
+    write_greenroom_marker(wrapper)  # editor-neutral wrapper identity
 
     info("")
     info(f"created {project_name}:")
@@ -1149,7 +1225,10 @@ def cmd_new(args: argparse.Namespace) -> None:
     info(f"  private:    {private_path}")
     if fork_path:
         info(f"  private-fork: {fork_path} (cloned from {public_dir_name}, remote 'upstream')")
-    info(f"  workspace:  {workspace_path}")
+    if workspace_path is not None:
+        info(f"  workspace:  {workspace_path}")
+    else:
+        info("  workspace:  (skipped — no editor detected; run with --workspace to add one)")
     if grant_paths:
         info(f"  access:     {len(grant_paths)} repo(s) granted their siblings")
     info(f"  map:        {readme_path} ({readme_state})")
@@ -1193,20 +1272,27 @@ def cmd_sync(args: argparse.Namespace) -> None:
 
     migrate_claude_to_agents(wrapper, project_name, canonical)  # legacy layout migration
 
-    workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    if should_write_workspace(wrapper, getattr(args, "workspace", None)):
+        workspace_path = write_code_workspace(wrapper, project_name, repos, canonical)
+    else:
+        workspace_path = None
     grant_paths = write_all_grants(wrapper, repos)  # Claude adapter: stray-launch safety net
     write_per_repo_claude_pointers(wrapper, repos)  # per-repo CLAUDE.md where AGENTS.md exists
     readme_path, readme_state = write_workspace_readme(wrapper, project_name, repos, canonical)
     agents_path, agents_state = write_agents_md(wrapper, project_name, canonical)
     claude_path, claude_state = write_claude_pointer(wrapper)  # Claude adapter: wrapper pointer
     gemini_path, gemini_state = write_gemini_settings(wrapper)  # Gemini adapter
+    write_greenroom_marker(wrapper)  # editor-neutral wrapper identity
 
     info("")
     info(f"synced {project_name}:")
     info(f"  wrapper:    {wrapper}")
     info(f"  repos:      {', '.join(repos)}")
     info(f"  canonical:  {canonical}")
-    info(f"  workspace:  {workspace_path}")
+    if workspace_path is not None:
+        info(f"  workspace:  {workspace_path}")
+    else:
+        info("  workspace:  (skipped — no editor detected; run with --workspace to add one)")
     if grant_paths:
         info(f"  access:     {len(grant_paths)} repo(s) granted their siblings")
     info(f"  map:        {readme_path} ({readme_state})")
@@ -1516,6 +1602,19 @@ def cmd_collect(args: argparse.Namespace) -> None:
     info(f"review with `git -C {shlex.quote(str(private))} status`, then commit when ready.")
 
 
+def _add_workspace_flags(p: argparse.ArgumentParser) -> None:
+    """Tri-state --workspace / --no-workspace (default None → detect).
+
+    Shared by new/retrofit/sync: --workspace forces the .code-workspace write,
+    --no-workspace skips it, neither lets should_write_workspace detect.
+    """
+    ws = p.add_mutually_exclusive_group()
+    ws.add_argument("--workspace", dest="workspace", action="store_true", default=None,
+                    help="Force-write the VS Code .code-workspace file")
+    ws.add_argument("--no-workspace", dest="workspace", action="store_false",
+                    help="Never write the .code-workspace file")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="greenroom",
@@ -1549,6 +1648,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Clone <project>-public into <project>-private-fork (local 'upstream' remote, no origin)",
     )
+    _add_workspace_flags(p_retro)
     p_retro.set_defaults(func=cmd_retrofit)
 
     p_new = sub.add_parser(
@@ -1582,6 +1682,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Clone <project>-public into <project>-private-fork (local 'upstream' remote, no origin)",
     )
+    _add_workspace_flags(p_new)
     p_new.set_defaults(func=cmd_new)
 
     p_collect = sub.add_parser(
@@ -1620,6 +1721,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync.add_argument("--wrapper", help="Wrapper dir (default: detect from cwd)")
     p_sync.add_argument("--name", help="Project name (default: wrapper basename)")
     p_sync.add_argument("--canonical", help="Canonical repo dir name (default: prefer a *-public repo)")
+    _add_workspace_flags(p_sync)
     p_sync.set_defaults(func=cmd_sync)
 
     return parser

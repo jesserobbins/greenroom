@@ -183,7 +183,11 @@ mkdir -p "$T/multi"
 mkrepo "$T/multi/multi-public"
 mkrepo "$T/multi/multi-public-fork"
 mkrepo "$T/multi/multi-private"
-"$SCRIPT" sync --wrapper "$T/multi" >/dev/null
+# Force the workspace on first create so the contents/merge/launcher sub-tests
+# below have a file to inspect regardless of whether a VS Code-family editor is
+# on PATH (portable on a headless box). Once it exists, an existing
+# *.code-workspace is itself a detection signal, so later plain `sync`s refresh it.
+"$SCRIPT" sync --wrapper "$T/multi" --workspace >/dev/null
 ws="$T/multi/multi.code-workspace"
 [ -f "$ws" ] || fail "sync did not write the workspace file"
 if ! python3 - "$ws" <<'PY'
@@ -419,7 +423,8 @@ ok "migration: hand-edited CLAUDE.md is left untouched"
 
 # --- 13. --with-private-fork creates the fork, wires it, neutralizes public-side PR text ---
 mkdir -p "$T/forktest"
-out13="$("$SCRIPT" new forkproj --parent "$T/forktest" --init-public --with-private-fork 2>&1)"
+# --workspace so the fork-as-workspace-root assertion below is portable (no PATH probe needed).
+out13="$("$SCRIPT" new forkproj --parent "$T/forktest" --init-public --with-private-fork --workspace 2>&1)"
 fork_dir="$T/forktest/forkproj/forkproj-private-fork"
 [ -d "$fork_dir/.git" ] || fail "--with-private-fork: private-fork dir not created as a git repo"
 
@@ -695,11 +700,15 @@ ok "explicit --wrapper at \$HOME is refused and writes nothing"
 mkdir -p "$T/realwrap"
 mkrepo "$T/realwrap/realwrap-public"
 mkrepo "$T/realwrap/realwrap-private"
-( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null
+# --workspace forces the sentinel-bearing file so this test is about the sentinel,
+# not about whether an editor is on PATH.
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync --workspace ) >/dev/null
 grep -q '"greenroom"' "$T/realwrap"/*.code-workspace || fail "sync did not stamp the greenroom sentinel"
-# drop the -private sibling: the sentinel alone must keep it a wrapper on re-sync
+# Isolate the workspace sentinel as the SOLE signal: drop both the -private sibling
+# and the .greenroom marker, so only the sentinel can keep it a wrapper on re-sync.
 rm -rf "$T/realwrap/realwrap-private"
-( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync ) >/dev/null 2>&1 && rc=0 || rc=$?
+rm -f "$T/realwrap/.greenroom"
+( cd "$T/realwrap/realwrap-public" && "$SCRIPT" sync --workspace ) >/dev/null 2>&1 && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || fail "sentinel-only wrapper no longer recognized on re-sync"
 ok "greenroom sentinel workspace qualifies a wrapper on its own"
 
@@ -853,5 +862,84 @@ echo "$out4" | grep -q "SKIP script-root" || fail "install.sh did not SKIP a rea
 [ "$(cat "$fh/.claude/skills/greenroom")" = "user file" ] || fail "install.sh clobbered a real file at the script-root path"
 [ -L "$fh/.claude/skills/greenroom-setup" ] || fail "install.sh did not still link the skill after the script-root SKIP"
 ok "a real file at the script-root path is SKIPped and the rest of the install proceeds"
+
+# --- 37. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+mkdir -p "$T/mark"
+"$SCRIPT" new markproj --parent "$T/mark" >/dev/null
+gm="$T/mark/markproj/.greenroom"
+[ -f "$gm" ] || fail "new did not write the .greenroom marker"
+python3 - "$gm" <<'PY' || fail ".greenroom is not {\"schema\": <int>}"
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert isinstance(d.get("schema"), int), d
+assert "folders" not in d and "repos" not in d and "canonical" not in d, "marker must be minimal"
+PY
+ok "new writes a minimal .greenroom marker"
+
+# sync adds .greenroom to a pre-marker wrapper (simulate by deleting it).
+# `new` with no --init-public/--clone leaves the public dir uncreated, so detect
+# the wrapper from the always-present private repo instead.
+rm -f "$gm"
+( cd "$T/mark/markproj/markproj-private" && "$SCRIPT" sync ) >/dev/null
+[ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
+ok "sync adds .greenroom to a wrapper that lacks it"
+
+# --- 38. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+fhm="$T/markforbid"
+mkdir -p "$fhm"
+mkrepo "$fhm/repo-public"
+mkrepo "$fhm/repo-private"
+echo '{"schema": 1}' > "$fhm/.greenroom"
+# point HOME at the forbidden dir so _is_forbidden_root($HOME) fires on the walk-up
+HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -ne 0 ] || fail "a stray .greenroom in \$HOME wrongly qualified it as a wrapper"
+[ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
+ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
+
+# --- 39. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
+# .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
+mkdir -p "$T/nows"
+GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new nowsproj --parent "$T/nows" --init-public >/dev/null
+nws="$T/nows/nowsproj/nowsproj.code-workspace"
+[ ! -f "$nws" ] || fail "workspace was written despite no VS Code signal"
+[ -f "$T/nows/nowsproj/.greenroom" ] || fail "marker missing — wrapper identity must not depend on the workspace"
+# iter-1 codex L: the generated README of a no-workspace wrapper must not give an
+# unconditional "Open it through <project>.code-workspace" instruction for a file
+# that was never written. It leads with wrapper-launch and mentions the workspace
+# only as conditional ("if ... present"/"if ... exists").
+nows_readme="$T/nows/nowsproj/README.md"
+grep -q 'cd nowsproj && <your-agent>' "$nows_readme" || fail "no-workspace README does not lead with wrapper-launch"
+# Negative pin: the old unconditional "Open it through <ws>" phrasing must be gone.
+grep -qE 'Open it through `nowsproj.code-workspace`' "$nows_readme" \
+  && fail "no-workspace README unconditionally tells the user to open a workspace file that was not written"
+# Positive property: the workspace must be mentioned conditionally, so the test
+# also fails if the wording regresses to a differently-phrased unconditional open.
+grep -q 'is present' "$nows_readme" || fail "no-workspace README dropped the conditional ('if present') framing around the workspace file"
+ok "a no-workspace wrapper's README leads with wrapper-launch and frames the workspace conditionally"
+
+ok "workspace skipped when no VS Code family is detected (identity via .greenroom)"
+
+# --workspace forces the file even with no editor detected
+( cd "$T/nows/nowsproj/nowsproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync --workspace ) >/dev/null
+[ -f "$nws" ] || fail "--workspace did not force the workspace file"
+ok "--workspace forces the workspace file regardless of detection"
+
+# --no-workspace runs cleanly and does not delete an existing workspace file
+# (the file here was greenroom-authored by the preceding --workspace sync; the point
+# is that --no-workspace means "skip writing", never "remove an existing file").
+( cd "$T/nows/nowsproj/nowsproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync --no-workspace ) >/dev/null
+[ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
+ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
+
+# --- 40. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+mkdir -p "$T/vscode"
+GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
+vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
+[ ! -f "$vws" ] || fail "setup: workspace should have been skipped before .vscode/ existed"
+mkdir -p "$T/vscode/vscodeproj/.vscode"
+( cd "$T/vscode/vscodeproj/vscodeproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync ) >/dev/null
+[ -f "$vws" ] || fail "a present .vscode/ dir did not trigger the workspace write"
+ok "detection writes the workspace when .vscode/ exists even with no family binary"
 
 echo "all $pass checks passed"
