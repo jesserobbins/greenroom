@@ -1,5 +1,5 @@
 ---
-description: Re-scan a greenroom wrapper and update its VS Code workspace, agent working-dir access, and repo map (run after dropping a new fork/clone under the wrapper)
+description: Re-scan a greenroom wrapper and update its agent working-dir access, repo map, and (when a VS Code-family editor is detected) its workspace file — run after dropping a new fork/clone under the wrapper
 argument-hint: [--wrapper <dir>] [--canonical <repo-dir>] [--name <project>]
 ---
 
@@ -17,8 +17,9 @@ P="${CLAUDE_PLUGIN_ROOT:-}"
 With no `--wrapper`, the script detects the wrapper by walking up from the current directory to the nearest non-git folder that contains git repos, so it works from inside any of the project's repos or from the wrapper itself.
 
 What `sync` does (all idempotent and additive):
-- **Discovers every git repo** directly under the wrapper and lists each as a `<project>.code-workspace` folder root, canonical repo first.
-- **Merges into an existing workspace**: adds newly-found repos and any missing default settings, but never overwrites a folder, setting, task, or customization you added by hand. (If the file has `//` JSONC comments, stdlib JSON can't parse it, so the script leaves it untouched and warns.)
+- **Discovers every git repo** directly under the wrapper, canonical repo first, and lists each as a `<project>.code-workspace` folder root **when a workspace is written** (see below).
+- **Writes the `.greenroom` identity marker** at the wrapper root if it's missing, so older wrappers gain the editor-neutral identity signal.
+- **Writes the workspace only when warranted.** A `<project>.code-workspace` is written/refreshed when a VS Code-family editor is detected (`code`/`cursor`/`codium`/`windsurf` on `PATH`, or an existing `.vscode/`/`*.code-workspace`); otherwise it's skipped. Force or suppress with `--workspace` / `--no-workspace`. When it does write, it **merges into an existing workspace**: adds newly-found repos and any missing default settings, but never overwrites a folder, setting, task, or customization you added by hand. (If the file has `//` JSONC comments, stdlib JSON can't parse it, so the script leaves it untouched and warns.)
 - **Writes `AGENTS.md`** at the wrapper root and in each repo (write-if-absent). Also writes the `CLAUDE.md` pointer (`@AGENTS.md`) for Claude Code and `.gemini/settings.json` for Gemini CLI.
 - **Migrates old greenroom-authored `CLAUDE.md` files.** If a wrapper or per-repo `CLAUDE.md` was written by a previous version of greenroom and no `AGENTS.md` exists yet, `sync` writes `AGENTS.md` with the content and replaces `CLAUDE.md` with the `@AGENTS.md` pointer. A hand-edited `CLAUDE.md` (content differs from what greenroom would have written) is left untouched and a note is printed to migrate it manually.
 - **Grants Claude the sibling repos** by listing each repo's siblings (`../<name>`) under `permissions.additionalDirectories` in **every** repo's `.claude/settings.local.json` (locally git-excluded, so no private paths leak into the public repo), for defense-in-depth against a stray Claude launch inside a single repo. Add-only: entries you added by hand are kept.
@@ -26,7 +27,7 @@ What `sync` does (all idempotent and additive):
 
 After it runs:
 - Summarize the discovered repos, the canonical repo, and the files written.
-- Remind the user that the canonical way to launch is at the wrapper (`cd <wrapper> && <your-agent>`): every repo is then under cwd and each repo's `AGENTS.md` loads as the agent touches its files. The workspace's `Claude Code` task does the same from VS Code. If new folder roots were added, suggest re-opening the `<project>.code-workspace` (or reloading the window) to pick them up.
+- Remind the user that the canonical way to launch is at the wrapper (`cd <wrapper> && <your-agent>`): every repo is then under cwd and each repo's `AGENTS.md` loads as the agent touches its files. If a workspace was written (VS Code family detected), its `Claude Code` task does the same from VS Code, and if new folder roots were added, suggest re-opening the `<project>.code-workspace` (or reloading the window) to pick them up.
 - If the wrong repo was chosen as canonical, re-run with `--canonical <repo-dir>`.
 
 Reference: full conventions and edge cases live in the greenroom skill (`skills/setup/SKILL.md` in the repo; on a plugin install, `$P/skills/setup/SKILL.md`; on a manual install, `~/.claude/skills/greenroom-setup/SKILL.md`).

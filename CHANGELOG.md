@@ -5,6 +5,24 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.1.8-alpha] - 2026-06-25
+
+### Added
+- A `.greenroom` marker file at the wrapper root is now the editor-neutral
+  signal that identifies a greenroom wrapper. `new`, `retrofit`, and `sync`
+  all write it (write-if-absent), and `sync` adds it to older wrappers that
+  predate it. Wrapper detection no longer depends on the VS Code workspace file.
+- `--workspace` / `--no-workspace` flags on `new`, `retrofit`, and `sync` to
+  force or suppress the `<project>.code-workspace` write regardless of detection.
+
+### Changed
+- The `<project>.code-workspace` file is now written **only when a VS Code-family
+  editor is detected** — `code`, `cursor`, `codium`, or `windsurf` on `PATH`, or
+  an existing `.vscode/` or `*.code-workspace` in the wrapper. A terminal-only
+  setup (any editor that reads `AGENTS.md` natively) no longer gets an unused
+  workspace file. Existing wrappers are unaffected: a present `*.code-workspace`
+  is itself a detection signal, so `sync` keeps refreshing it.
+
 ## [0.1.7-alpha] - 2026-06-25
 
 ### Changed

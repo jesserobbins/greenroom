@@ -23,7 +23,7 @@ greenroom keeps that work under git, in a **private** repo that sits right besid
     └── research/  # transcripts, links, experiments
 ```
 
-The parent folder has no `.git/` of its own. It's an organizational container, so one `cd ~/src/<project>/` puts both halves of the project in front of you. greenroom also writes a VS Code workspace and wires any coding agent to reach both repos from a single session (see ["One entry point, any editor"](#one-entry-point-any-editor)).
+The parent folder has no `.git/` of its own. It's an organizational container, so one `cd ~/src/<project>/` puts both halves of the project in front of you. greenroom wires any coding agent to reach both repos from a single session, and writes a VS Code workspace too when it detects a VS Code-family editor (see ["One entry point, any editor"](#one-entry-point-any-editor)).
 
 ## Install
 
@@ -101,7 +101,7 @@ Because every repo sits under the wrapper, the session can read and edit all of 
 
 greenroom produces `AGENTS.md` as its orientation standard. It is natively read by 25+ agents, including Codex, Cursor, Aider, GitHub Copilot, Windsurf, Zed, Warp, Google Jules, Devin, and VS Code. Claude Code reads `CLAUDE.md`, so greenroom writes a thin `CLAUDE.md` pointer (`@AGENTS.md`) that imports the same file. Gemini CLI is wired via `.gemini/settings.json`. Every other agent reads `AGENTS.md` natively with no extra config.
 
-VS Code rides on top of that same wrapper rule. The script writes a `<project>.code-workspace` at the parent root that scans the wrapper and lists every repo it finds as a root, each with its own Source Control panel, canonical repo first. New terminals anchor to the wrapper, the **Claude Code** task launches `claude` there for you, and each project gets a title-bar color derived from its name so two open projects never look alike. Prefer a bare shell? A one-line alias does the same job:
+VS Code rides on top of that same wrapper rule — but only if you use it. When a VS Code-family editor is detected (`code`, `cursor`, `codium`, or `windsurf` on your `PATH`, or an existing `.vscode/` or `*.code-workspace` in the wrapper), the script writes a `<project>.code-workspace` at the parent root that scans the wrapper and lists every repo it finds as a root, each with its own Source Control panel, canonical repo first. New terminals anchor to the wrapper, the **Claude Code** task launches `claude` there for you, and each project gets a title-bar color derived from its name so two open projects never look alike. Force or skip the file regardless of detection with `--workspace` / `--no-workspace`. Wrapper identity itself lives in an editor-neutral `.greenroom` marker at the wrapper root, so the workspace file is never required — a terminal-only setup gets none. Prefer a bare shell? A one-line alias does the same job:
 
 ```
 gr() { cd ~/src/"$1" && claude; }   # or: codex, gemini, aider, …
@@ -125,7 +125,7 @@ It scans two sources: files on the default branch that match private-shaped path
 
 ## Tests
 
-`tests/smoke.sh` builds throwaway repos in a temp dir and exercises the script's reliability-critical paths: retrofit when the parent already holds other repos, `collect` classification of files at the repo root, crash-safe restore when an in-place move fails, component-boundary matching in the plugin-config check, the full `sync` wiring (workspace, access, and map), the AGENTS.md core plus the Claude and Gemini adapters, and the `--with-private-fork` scaffold. It also covers the wrapper-safety guards: refusing `$HOME` and other forbidden roots as scaffold targets, the `GREENROOM_ROOT` boundary, the workspace sentinel, and the namespaced manual install. Run it directly:
+`tests/smoke.sh` builds throwaway repos in a temp dir and exercises the script's reliability-critical paths: retrofit when the parent already holds other repos, `collect` classification of files at the repo root, crash-safe restore when an in-place move fails, component-boundary matching in the plugin-config check, the full `sync` wiring (workspace, access, and map), the AGENTS.md core plus the Claude and Gemini adapters, and the `--with-private-fork` scaffold. It also covers the wrapper-safety guards: refusing `$HOME` and other forbidden roots as scaffold targets, the `GREENROOM_ROOT` boundary, the workspace sentinel, the `.greenroom` identity marker (including that a stray marker in a forbidden dir is still refused), the conditional workspace write and its `--workspace`/`--no-workspace` flags, and the namespaced manual install. Run it directly:
 
 ```
 tests/smoke.sh

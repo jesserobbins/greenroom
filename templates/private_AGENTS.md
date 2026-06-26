@@ -43,4 +43,4 @@ cd .. && claude   # or: codex, gemini, ...
 
 From the wrapper, this repo and every sibling are reachable as subdirectories, session history stays in one bucket, and this `AGENTS.md` loads automatically the first time its files are touched. Launching directly inside `{{PRIVATE_DIR_NAME}}/` fragments session history into a separate bucket and breaks continuity with the rest of the project. If you notice the session is rooted here, flag it and relaunch at the wrapper instead of proceeding.
 
-(If you do work inside this repo from a sub-repo-rooted session, `.claude/settings.local.json` grants access to the sibling repos. VS Code users: open the project via the `*.code-workspace` at the wrapper root, never `Open Folder` on this directory.)
+(If you do work inside this repo from a sub-repo-rooted session, `.claude/settings.local.json` grants access to the sibling repos. If you use a VS Code-family editor and a `*.code-workspace` exists at the wrapper root, open the project through it rather than `Open Folder` on this directory; otherwise just launch your agent at the wrapper as above.)

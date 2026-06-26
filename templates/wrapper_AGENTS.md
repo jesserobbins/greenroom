@@ -10,7 +10,7 @@ From a terminal:
 cd <this directory> && claude   # or: codex, gemini, ...
 ```
 
-That is the whole rule. Because this directory is the launch cwd, every child repo below is readable and writable with no extra wiring, session history stays in **one** bucket, and each child repo's own `AGENTS.md` loads automatically the first time you touch its files. VS Code users can instead run the `Claude Code ({{CANONICAL_DIR_NAME}})` task or open the `*.code-workspace` here. The repo map lives in `README.md` in this directory.
+That is the whole rule, and it works in any editor or none. Because this directory is the launch cwd, every child repo below is readable and writable with no extra wiring, session history stays in **one** bucket, and each child repo's own `AGENTS.md` loads automatically the first time you touch its files. If you use a VS Code-family editor (VS Code, Cursor, …) and a `*.code-workspace` was written here, you can open it or run the `Claude Code ({{CANONICAL_DIR_NAME}})` task instead. The repo map lives in `README.md` in this directory.
 
 ## Where to work
 
