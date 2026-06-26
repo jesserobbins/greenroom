@@ -212,7 +212,7 @@ def _merge_launcher(existing: dict, task: dict) -> None:
     tlist.append(task)
 
 
-_VSCODE_FAMILY = ("code", "cursor", "codium", "windsurf")
+_VSCODE_FAMILY = ("code", "cursor", "codium", "vscodium", "windsurf")
 
 
 def _vscode_family_detected(wrapper: Path) -> bool:

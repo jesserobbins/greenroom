@@ -17,8 +17,8 @@ reaches a stable release.
 
 ### Changed
 - The `<project>.code-workspace` file is now written **only when a VS Code-family
-  editor is detected** — `code`, `cursor`, `codium`, or `windsurf` on `PATH`, or
-  an existing `.vscode/` or `*.code-workspace` in the wrapper. A terminal-only
+  editor is detected** — `code`, `cursor`, `codium`/`vscodium`, or `windsurf` on
+  `PATH`, or an existing `.vscode/` or `*.code-workspace` in the wrapper. A terminal-only
   setup (any editor that reads `AGENTS.md` natively) no longer gets an unused
   workspace file. Existing wrappers are unaffected: a present `*.code-workspace`
   is itself a detection signal, so `sync` keeps refreshing it.

@@ -921,7 +921,9 @@ ok "workspace skipped when no VS Code family is detected (identity via .greenroo
 [ -f "$nws" ] || fail "--workspace did not force the workspace file"
 ok "--workspace forces the workspace file regardless of detection"
 
-# --no-workspace runs cleanly and does not delete an existing user workspace file
+# --no-workspace runs cleanly and does not delete an existing workspace file
+# (the file here was greenroom-authored by the preceding --workspace sync; the point
+# is that --no-workspace means "skip writing", never "remove an existing file").
 ( cd "$T/nows/nowsproj/nowsproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync --no-workspace ) >/dev/null
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
