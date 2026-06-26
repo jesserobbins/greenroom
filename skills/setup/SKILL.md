@@ -57,7 +57,7 @@ Agents that read `AGENTS.md` natively need no extra config. Two adapters wire th
 
 **No per-editor config beyond these.** greenroom generates nothing editor-specific apart from the (conditional) VS Code workspace and the Gemini pointer. Every other editor — Zed, JetBrains, Helix, vim, Cursor, Aider, and the rest — reads `AGENTS.md` natively and reaches both repos from the wrapper cwd, so there is no `.idea/`, `.zed/`, or similar to write. The bar for a generated per-editor file is "the editor can't otherwise find its instructions or open both repos"; only Gemini cleared it (it needed a pointer to `AGENTS.md`).
 
-The private dir is named `<project>-private/` (not just `private/`) so tools that infer project identity from the directory name (git remotes, agent session reporting, IDE workspace labels) see a unique, project-scoped name. Legacy projects with a plain `private/` dir keep working: the script and `collect` subcommand recognize both names. Migrate by renaming the directory and updating the `<project>.code-workspace` file (folder name + path).
+The private dir is named `<project>-private/` (not just `private/`) so tools that infer project identity from the directory name (git remotes, agent session reporting, IDE workspace labels) see a unique, project-scoped name. Legacy projects with a plain `private/` dir keep working: the script and `collect` subcommand recognize both names. Migrate by renaming the directory and (if a `<project>.code-workspace` exists) updating its folder name and path.
 
 When a VS Code-family editor is detected, a multi-root workspace file (`<project>.code-workspace`) is written at the wrapper root as the VS Code entry point. Wrapper identity, though, lives in the editor-neutral `.greenroom` marker — not the workspace file — so a terminal-only setup is a complete, recognized wrapper with no workspace at all. See "VS Code workspace" below.
 
@@ -135,7 +135,7 @@ The `<project>-private/AGENTS.md` written by the script tells any agent working 
 - **Working tree dirty**: refuses to retrofit if the public repo has uncommitted changes. Commit or stash first.
 - **Parent already exists and non-empty**: refuses to overwrite. Manual cleanup required.
 - **Idempotent re-runs**: if the source path is already inside its target parent structure, the script detects this and only adds the missing private dir (does not double-create). Recognizes both the canonical `<project>-private/` and legacy `private/` as already-existing.
-- **Legacy `private/` dir**: if a wrapper already has a plain `private/` (from before the rename), retrofit leaves it where it is and prints a hint to rename it. To migrate, rename the directory (`mv private <project>-private`) and update the folder name and path in `<project>.code-workspace`.
+- **Legacy `private/` dir**: if a wrapper already has a plain `private/` (from before the rename), retrofit leaves it where it is and prints a hint to rename it. To migrate, rename the directory (`mv private <project>-private`) and, if a `<project>.code-workspace` exists, update the folder name and path in it.
 
 ## VS Code workspace
 
@@ -169,8 +169,8 @@ The wrapper-root `README.md` carries an auto-managed map (inside `<!-- greenroom
 
 How to open the project (every time):
 
-1. From VS Code: `File → Open Workspace from File…` → `<wrapper>/<project>.code-workspace`. Or from terminal: `code <wrapper>/<project>.code-workspace`. Subsequent launches: pick `<project> (Workspace)` from "Recent."
-2. Run the **`Claude Code (<canonical>)`** task (or open a terminal, which lands at the wrapper, and run `claude`, `codex`, `gemini`, or whichever agent you use). Session history goes to a single bucket; all child repos are reachable; each repo's `AGENTS.md` loads lazily.
+1. From any terminal: `cd <wrapper> && <your-agent>` (`claude`, `codex`, `gemini`, or whichever you use). This is the universal entry point — it works in any editor or none. Session history goes to a single bucket; all child repos are reachable; each repo's `AGENTS.md` loads lazily.
+2. If a `<project>.code-workspace` was written (VS Code-family editor detected), VS Code users can instead open it via `File → Open Workspace from File…` → `<wrapper>/<project>.code-workspace` (or `code <wrapper>/<project>.code-workspace` from a terminal; subsequent launches: pick `<project> (Workspace)` from "Recent"), then run the **`Claude Code (<canonical>)`** task.
 
 ## Aftercare checklist
 
@@ -184,6 +184,6 @@ After running the script, the model should remind the user to:
    gh repo create <your-account>/<project>-private --private --source=. --remote=origin
    git push -u origin main
    ```
-3. **Open VS Code via the new `<project>.code-workspace` file** (not via `Open Folder` on the wrapper or either repo). If a previous VS Code window had the old layout open, close it first.
+3. **Launch at the new wrapper** (`cd <wrapper> && <your-agent>`), not inside either repo. If a `<project>.code-workspace` was written (VS Code-family editor detected), open the project through it rather than `Open Folder` on the wrapper or a repo; if a previous VS Code window had the old layout open, close it first.
 4. **Update shell aliases** that hardcoded the old `~/src/<name>/` path (now the parent folder, not the repo).
 5. **One-time global hygiene** (only if not already done): add `.notes`, `NOTES.md`, `SCRATCH.md`, `*.private.md`, `.private/` to `~/.config/git/ignore` so private-flavored filenames can't accidentally land in public repos from a fresh clone.
