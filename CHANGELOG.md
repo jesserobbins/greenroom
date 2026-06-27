@@ -5,6 +5,23 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [Unreleased]
+
+### Changed
+- The skill is renamed from `setup` to `greenroom-setup`. The `npx skills` CLI
+  derives a skill's install directory and `@handle` from the `name:` field, so a
+  bare `name: setup` installed as `~/.claude/skills/setup/` and collided with any
+  other ecosystem skill named `setup`. Naming it `greenroom-setup` keeps the
+  skills.sh handle (`jesserobbins/greenroom@greenroom-setup`), the manual-install
+  directory, and the plugin handle identical and collision-free. The plugin
+  invocation is now `/greenroom:greenroom-setup`.
+
+### Fixed
+- The skill's `description` no longer contains an unquoted colon-space (`layout:`
+  → `layout —`). The `npx skills` YAML parser silently dropped the skill when the
+  plain-scalar description value contained `: `, which made greenroom
+  undiscoverable via `npx skills add` and unlistable on skills.sh.
+
 ## [0.1.8-alpha] - 2026-06-25
 
 ### Added

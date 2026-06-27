@@ -771,12 +771,19 @@ printf '\xff\xfe\x00bad' > "$T/badenc/x.code-workspace"                         
 [ "$rc" -ne 0 ] || fail "an undecodable .code-workspace wrongly qualified a wrapper"
 ok "an undecodable .code-workspace is skipped without crashing classification"
 
-# --- 28. skill lives at skills/setup/ (no root SKILL.md), so it invokes as /greenroom:setup (issue #3) ---
+# --- 28. skill is named greenroom-setup so it installs collision-free on skills.sh.
+#         The npx skills CLI derives the install dir + handle from the `name:` field,
+#         not the repo directory, so a bare `name: setup` would land as ~/.claude/skills/setup/
+#         and collide with any other ecosystem `setup` skill. Naming it greenroom-setup
+#         keeps the plugin, manual-install, and skills.sh handles identical. ---
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[ -f "$REPO_ROOT/skills/setup/SKILL.md" ] || fail "skills/setup/SKILL.md is missing"
+[ -f "$REPO_ROOT/skills/greenroom-setup/SKILL.md" ] || fail "skills/greenroom-setup/SKILL.md is missing"
 [ ! -f "$REPO_ROOT/SKILL.md" ] || fail "a root SKILL.md still exists (would invoke as /greenroom:greenroom)"
-grep -q '^name: setup$' "$REPO_ROOT/skills/setup/SKILL.md" || fail "skills/setup/SKILL.md frontmatter name is not 'setup'"
-ok "skill lives at skills/setup/ with name: setup and no root SKILL.md"
+[ ! -e "$REPO_ROOT/skills/setup" ] || fail "a bare skills/setup/ still exists (collision risk on skills.sh)"
+grep -q '^name: greenroom-setup$' "$REPO_ROOT/skills/greenroom-setup/SKILL.md" || fail "skills/greenroom-setup/SKILL.md frontmatter name is not 'greenroom-setup'"
+desc_line="$(sed -n 's/^description: //p' "$REPO_ROOT/skills/greenroom-setup/SKILL.md" | head -1)"
+case "$desc_line" in *": "*) fail "description has an unquoted colon-space (npx skills YAML parser drops the skill)";; esac
+ok "skill lives at skills/greenroom-setup/ with name: greenroom-setup and no root SKILL.md"
 
 # --- 29. manual install: namespaced skill name + script resolves at the tier-3 path (issue #3) ---
 mh="$T/manualhome"
@@ -791,7 +798,7 @@ ok "manual install gives /greenroom-setup and resolves the script at the tier-3 
 # --- 30. the script-root is a plain dir of targeted symlinks, NOT the repo root.
 #         Symlinking the whole root would expose .claude-plugin/plugin.json and the
 #         nested skills/, which Claude Code auto-loads as a `greenroom@skills-dir`
-#         plugin (the /greenroom:setup stutter, via a path we did not intend). ---
+#         plugin (a second /greenroom:greenroom-setup registration, via a path we did not intend). ---
 [ ! -L "$mh/.claude/skills/greenroom" ] || fail "script-root is a symlink to the repo root (would expose the plugin manifest)"
 [ -d "$mh/.claude/skills/greenroom" ] || fail "script-root is not a directory"
 [ ! -e "$mh/.claude/skills/greenroom/.claude-plugin/plugin.json" ] || fail "script-root exposes .claude-plugin/plugin.json (auto-loads as greenroom@skills-dir)"
