@@ -25,6 +25,14 @@ greenroom keeps that work under git, in a **private** repo that sits right besid
 
 The parent folder has no `.git/` of its own. It's an organizational container, so one `cd ~/src/<project>/` puts both halves of the project in front of you. greenroom wires any coding agent to reach both repos from a single session, and writes a VS Code workspace too when it detects a VS Code-family editor (see ["One entry point, any editor"](#one-entry-point-any-editor)).
 
+## Different people work differently
+
+Not everyone uses [superpowers](https://github.com/obra/Superpowers) — or any agent-context tooling — the same way. Some people are happy to commit their docs, plans, and scratch right into the main repo and think out loud in the open. That's a perfectly good way to work, and if it's yours, you may not need greenroom at all.
+
+But plenty of us don't want our half-formed thinking, working notes, and scratch living in public. For me that's *especially* true when contributing to open source projects: a public repo is a shared, permanent, forkable record, and not every draft, design dead-end, or private review note belongs in it. Wanting to keep that material private isn't a lack of openness — it's wanting to choose, deliberately, what reaches the stage and when.
+
+greenroom exists for that preference. It doesn't change how the public repo works or push any opinion onto your collaborators; it just gives the private thinking a versioned home of its own, right next to the code, so keeping it private is the easy default rather than a thing you have to remember to do.
+
 ## Install
 
 **Requirements:** macOS or Linux (Windows is supported via WSL2, which presents a Linux environment). You need Python 3 and `git` on your `PATH`; the manual install also needs `bash`. greenroom uses POSIX paths and `$HOME` semantics, so native Windows (cmd/PowerShell) is not supported, and the script refuses to run there.
