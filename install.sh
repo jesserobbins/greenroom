@@ -37,7 +37,7 @@ link_one() {
 # collect examples. This is a plain directory holding two symlinks, NOT a copy
 # of the repo root: symlinking the whole root would drag in .claude-plugin/
 # plugin.json and the nested skills/, which Claude Code would auto-load as a
-# `greenroom@skills-dir` plugin (reintroducing the /greenroom:setup stutter).
+# `greenroom@skills-dir` plugin (reintroducing a duplicate /greenroom:greenroom-setup registration).
 # Exposing only scripts/ and templates/ keeps script resolution working with no
 # manifest and no nested skill in scope.
 SCRIPT_ROOT="$SKILL_DEST/greenroom"
@@ -73,15 +73,16 @@ else
   link_one "$REPO_DIR/templates" "$SCRIPT_ROOT/templates" "greenroom templates"
 fi
 
-# Link each skill under a greenroom- prefix so a manual install gets a
-# namespaced /greenroom-<name> instead of a generic /<name> that could collide
-# with the user's own skills. (A plugin install gives /greenroom:<name>.)
+# Link each skill under its own name. Skills are already named with a greenroom-
+# prefix (e.g. greenroom-setup), so a manual install gets a namespaced
+# /greenroom-<name> instead of a generic /<name> that could collide with the
+# user's own skills. (A plugin install gives /greenroom:<name>.)
 skill_linked=0
 for skill_dir in "$REPO_DIR"/skills/*/; do
   [ -f "$skill_dir/SKILL.md" ] || continue          # only dirs that hold a skill
   sname="$(basename "$skill_dir")"
   link_result=""
-  link_one "${skill_dir%/}" "$SKILL_DEST/greenroom-$sname" "skill greenroom-$sname"
+  link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname"
   [ "$link_result" = "linked" ] && skill_linked=$((skill_linked + 1))
 done
 
