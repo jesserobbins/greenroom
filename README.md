@@ -27,9 +27,9 @@ The parent folder has no `.git/` of its own. It's an organizational container, s
 
 ## Different people work differently
 
-Not everyone uses [superpowers](https://github.com/obra/Superpowers), or any agent-context tooling, the same way. Some people happily commit their docs and scratch right into the main repo, and that's a fine way to work. But plenty of us don't want half-formed thinking living in public, *especially* when contributing to open source, where the repo is a shared, permanent, forkable record. Keeping that material private isn't a lack of openness, it's choosing what reaches the stage and when.
+Not everyone works the same way. Some people happily commit their docs and scratch right into the main repo, and that's fine. But plenty of us don't want half-formed thinking living in public, *especially* in open source, where the repo is a permanent, forkable record. Keeping it private isn't a lack of openness, it's choosing what reaches the stage and when.
 
-greenroom exists for that preference, and it's not a vault for hiding work forever. Over the long term, sharing your context and collaborating on it openly is likely the better path. The green room is just where you prep before going on stage, so for a lot of work, "ready" eventually means in the open.
+greenroom isn't a vault for hiding work forever. Sharing your context openly is likely the better long-term path; the green room is just where you prep first, so "ready" eventually means in the open.
 
 ## Install
 
