@@ -33,6 +33,8 @@ But plenty of us don't want our half-formed thinking, working notes, and scratch
 
 greenroom exists for that preference. It doesn't change how the public repo works or push any opinion onto your collaborators; it just gives the private thinking a versioned home of its own, right next to the code, so keeping it private is the easy default rather than a thing you have to remember to do.
 
+None of this is an argument against openness. Over the long term, sharing your context and collaborating on it openly is likely the better path: it's how others learn from your thinking, build on it, and contribute back. greenroom isn't a vault for hiding work forever, it's a green room, the place you prep before going on stage. The goal is to choose what you share and when you're ready, not to keep it private for its own sake. For a lot of work, "ready" eventually means in the open.
+
 ## Install
 
 **Requirements:** macOS or Linux (Windows is supported via WSL2, which presents a Linux environment). You need Python 3 and `git` on your `PATH`; the manual install also needs `bash`. greenroom uses POSIX paths and `$HOME` semantics, so native Windows (cmd/PowerShell) is not supported, and the script refuses to run there.
