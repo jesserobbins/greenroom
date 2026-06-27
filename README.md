@@ -27,13 +27,9 @@ The parent folder has no `.git/` of its own. It's an organizational container, s
 
 ## Different people work differently
 
-Not everyone uses [superpowers](https://github.com/obra/Superpowers), or any agent-context tooling, the same way. Some people are happy to commit their docs, plans, and scratch right into the main repo and think out loud in the open. That's a perfectly good way to work, and if it's yours, you may not need greenroom at all.
+Not everyone uses [superpowers](https://github.com/obra/Superpowers), or any agent-context tooling, the same way. Some people happily commit their docs and scratch right into the main repo, and that's a fine way to work. But plenty of us don't want half-formed thinking living in public, *especially* when contributing to open source, where the repo is a shared, permanent, forkable record. Keeping that material private isn't a lack of openness, it's choosing what reaches the stage and when.
 
-But plenty of us don't want our half-formed thinking, working notes, and scratch living in public. For me that's *especially* true when contributing to open source projects: a public repo is a shared, permanent, forkable record, and not every draft, design dead-end, or private review note belongs in it. Wanting to keep that material private isn't a lack of openness, it's wanting to choose, deliberately, what reaches the stage and when.
-
-greenroom exists for that preference. It doesn't change how the public repo works or push any opinion onto your collaborators; it just gives the private thinking a versioned home of its own, right next to the code, so keeping it private is the easy default rather than a thing you have to remember to do.
-
-None of this is an argument against openness. Over the long term, sharing your context and collaborating on it openly is likely the better path: it's how others learn from your thinking, build on it, and contribute back. greenroom isn't a vault for hiding work forever, it's a green room, the place you prep before going on stage. The goal is to choose what you share and when you're ready, not to keep it private for its own sake. For a lot of work, "ready" eventually means in the open.
+greenroom exists for that preference, and it's not a vault for hiding work forever. Over the long term, sharing your context and collaborating on it openly is likely the better path. The green room is just where you prep before going on stage, so for a lot of work, "ready" eventually means in the open.
 
 ## Install
 
