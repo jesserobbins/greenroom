@@ -36,7 +36,9 @@ cwd you invoke it from are two different things, and several subcommands default
 a path argument to the current directory.
 
 The skill's directory differs per install shape (plugin, `npx skills add`,
-manual clone), so resolve it first and reuse `$greenroom` for every call:
+manual clone), so resolve it. **Every shell invocation is a fresh process — `$greenroom`
+does not survive between them.** Paste this whole block into each call that runs
+the script, ending with the `cd` (if any) and the invocation, as one command:
 
 ```bash
 # project-local install: walk up from $PWD, so it resolves from a subdirectory
@@ -72,12 +74,13 @@ for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" "$proj" "$cache"
   fi
 done
 [ -n "$greenroom" ] || { echo "greenroom.py not found; see the fallback below" >&2; exit 1; }
+# ...then, in this SAME command: any cd, then the invocation.
 python3 "$greenroom" <subcommand> [args]
 ```
 
-Resolve `$greenroom` **before** any `cd` into the project, and reuse it — several
-subcommands want you in a specific directory, and the project-local tier is
-relative to where you start.
+The resolver must run **before** any `cd` — the project-local tier is relative to
+where you start, and several subcommands want you in a specific directory. Both
+steps in one shell, in that order.
 
 `npx skills add` without `-g` installs into the *project*, which is why the
 walked-up project tier comes first after the env var — counting only your own

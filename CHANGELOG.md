@@ -78,9 +78,13 @@ reaches a stable release.
 - A *copied* `greenroom-setup` install (from `npx skills add ...@greenroom-setup`)
   is reported with the command to remove it. It is not a link `install.sh` made,
   so it is not ours to delete, but left unmentioned the retired skill name keeps
-  resolving forever. The migration also covers the 0.1.4–0.1.7 link shape, where
-  `~/.claude/skills/greenroom-setup` pointed at `<checkout>/skills/setup` and the
-  skill declared `name: setup`.
+  resolving forever. The migration covers every shape that path has taken —
+  `skills/setup` (0.1.4–0.1.7), `skills/greenroom-setup` (0.1.8), and a hand
+  repointed link at the renamed `skills/greenroom`; whose checkout the target
+  belongs to is the test, not what it declares. A copied
+  `~/.claude/skills/setup/` from before the first rename is reported too, with
+  ownership proven rather than assumed, since `setup` is the generic name the
+  whole rename chain was about.
 - Symlink ownership no longer fails for a target sitting directly under `/`,
   where the resolved path picked up a doubled slash and matched nothing.
 - `install.sh` is tracked executable. The README's manual-install block says

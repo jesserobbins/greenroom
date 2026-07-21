@@ -9,9 +9,17 @@ be a git repo); the sibling private dir is auto-detected. Pass
 `--public`/`--private` to run from elsewhere.
 
 ```bash
-# resolve $greenroom per SKILL.md BEFORE this cd, then:
+# $greenroom does not survive between shell calls. Paste SKILL.md's resolver block
+# at the top of THIS command, before the cd -- one shell, in this order:
+<resolver block from SKILL.md>
 cd <wrapper>/<project>-public
 python3 "$greenroom" collect            # dry-run, prints the plan
+```
+
+Then, as a second self-contained command (resolver again, then):
+
+```bash
+cd <wrapper>/<project>-public
 python3 "$greenroom" collect --apply    # copy files into <project>-private/
 ```
 

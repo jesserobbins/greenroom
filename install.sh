@@ -92,15 +92,15 @@ skill_name_of() {
   sed -n 's/^name:[[:space:]]*//p' "$1" | head -1 | tr -d '[:space:]'
 }
 
-# is_legacy_setup_skill <dir>: true if <dir> is the skill directory of a greenroom
-# checkout under either name this path has ever pointed at -- `setup` (0.1.4-0.1.7,
-# linked as ~/.claude/skills/greenroom-setup -> <checkout>/skills/setup) or
-# `greenroom-setup` (0.1.8). Both are retired; a link to either must go.
-is_legacy_setup_skill() {
-  local declared
+# is_greenroom_skill_dir <dir>: true if <dir> is any skill directory belonging to a
+# greenroom checkout -- <checkout>/skills/<anything>. Used for the retired
+# greenroom-setup path, which has pointed at `skills/setup` (0.1.4-0.1.7),
+# `skills/greenroom-setup` (0.1.8), and, for anyone who repointed it by hand, the
+# renamed `skills/greenroom`. The declared name is not the test; whose checkout it
+# is, is. Anything greenroom owns at that retired path should stop resolving.
+is_greenroom_skill_dir() {
   [ -d "$1" ] && [ -f "$1/SKILL.md" ] || return 1
-  declared="$(skill_name_of "$1/SKILL.md")"
-  case "$declared" in setup|greenroom-setup) ;; *) return 1 ;; esac
+  [ "$(basename "$(dirname "$1")")" = "skills" ] || return 1
   is_greenroom_checkout "$(dirname "$(dirname "$1")")"
 }
 
@@ -327,13 +327,13 @@ if [ -n "$install_failed" ]; then
 elif points_at_repo "$STALE"; then
   rm "$STALE"
   echo "migrated: removed the stale greenroom-setup link (renamed to greenroom)"
-elif stale_dest="$(resolve_link "$STALE")" && is_legacy_setup_skill "$stale_dest"; then
+elif stale_dest="$(resolve_link "$STALE")" && is_greenroom_skill_dir "$stale_dest"; then
   # A link into a DIFFERENT greenroom checkout that still exists on disk. Keyed
   # to $REPO_DIR alone this stayed registered forever after a re-clone -- exactly
   # what this migration exists to prevent. looks_like_ours is the wrong test here:
-  # it demands the target's name match the LINK's basename, and 0.1.4-0.1.7 linked
-  # this path at <checkout>/skills/setup, whose name is `setup`, not
-  # `greenroom-setup`. Accept either historical name.
+  # it demands the target's name match the LINK's basename, and this path has
+  # pointed at skills/setup, skills/greenroom-setup, and (by hand) the renamed
+  # skills/greenroom. Whose checkout it is, is the test -- not what it declares.
   rm "$STALE"
   echo "migrated: removed a greenroom-setup link into another checkout at $stale_dest"
 elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
@@ -346,6 +346,20 @@ elif [ -d "$STALE" ] && [ ! -L "$STALE" ] && [ -f "$STALE/SKILL.md" ] \
   # forever, which is the whole point of this migration.
   echo "NOTE: $STALE is a copied install of the retired greenroom-setup skill."
   echo "      Remove it (rm -rf $STALE) so the old name stops resolving."
+fi
+
+# Migration 3: the ORIGINAL collision. Before 0.1.8 the skill was called `setup`,
+# and `npx skills add` derives the install directory from `name:` -- so those users
+# have a copied ~/.claude/skills/setup/ that still resolves as /setup forever. It is
+# a copy, not a link we made, so it is only ever reported. `setup` is exactly the
+# generic name the rename was about, so ownership must be PROVEN, not assumed: the
+# declared name must be `setup` and the payload must identify itself as greenroom.
+LEGACY_SETUP="$SKILL_DEST/setup"
+if [ -d "$LEGACY_SETUP" ] && [ ! -L "$LEGACY_SETUP" ] && [ -f "$LEGACY_SETUP/SKILL.md" ] \
+   && [ "$(skill_name_of "$LEGACY_SETUP/SKILL.md")" = "setup" ] \
+   && grep -qi 'greenroom' "$LEGACY_SETUP/SKILL.md"; then
+  echo "NOTE: $LEGACY_SETUP is a copied install of greenroom under its original name."
+  echo "      Remove it (rm -rf $LEGACY_SETUP) so /setup stops resolving to greenroom."
 fi
 
 # Count the skills already present as a standalone install, or a successful run
