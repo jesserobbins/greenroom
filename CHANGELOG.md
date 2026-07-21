@@ -7,6 +7,20 @@ reaches a stable release.
 
 ## [Unreleased]
 
+## [0.2.1-alpha] - 2026-07-21
+
+### Fixed
+- `install.sh` recognizes a standalone install made by `npx skills add`. The CLI
+  does not copy into `~/.claude/skills/<name>`: it installs to
+  `<root>/.agents/skills/<name>` and symlinks `.claude/skills/<name>` at that.
+  The check required a real directory, so a working CLI install read as "a
+  symlink into somewhere else" — the run refused to link the commands, exited
+  non-zero, and told the user to delete a perfectly good copy of greenroom. A
+  symlink now counts when it is neither ours (which must refresh) nor another
+  greenroom checkout's (which must repoint). Found by running the real CLI: every
+  fixture in the suite had built a real directory, so the shape the CLI actually
+  produces was never exercised.
+
 ## [0.2.0-alpha] - 2026-07-21
 
 ### Added
@@ -265,6 +279,7 @@ behavior may still change.
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
 [#3]: https://github.com/jesserobbins/greenroom/issues/3
 [#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.2.1-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.2.0-alpha
 [0.1.8-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.8-alpha
 [0.1.7-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.7-alpha

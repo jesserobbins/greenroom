@@ -454,17 +454,33 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   # `sync` must not silently take over a user's dangling symlink at that name.
   claim=""
   case "$sname" in greenroom|greenroom-*) claim=skills ;; esac
-  # A real directory here that declares this very skill is a standalone install
-  # (`npx skills add -g`), not an obstacle. Left to link_one it becomes SKIP ->
-  # exit 1, telling the user to remove a perfectly good install of greenroom.
+  # An existing standalone install here is not an obstacle -- left to link_one it
+  # becomes SKIP -> exit 1, telling the user to remove a perfectly good install.
+  #
+  # It comes in two shapes. `npx skills add` does NOT simply copy: it installs to
+  # <root>/.agents/skills/<name> and SYMLINKS .claude/skills/<name> at that, so
+  # requiring a real directory here missed the shape the CLI actually produces.
+  # A symlink only counts when it is neither ours (that must refresh) nor another
+  # greenroom checkout's (that must repoint) -- both belong to link_one.
+  #
   # The payload check is not decoration: a name match alone would also accept a
   # stale pre-0.2 copy with no scripts/ inside, and we would report success while
   # the hollow commands point at a skill whose script is not there. Anything that
   # fails it falls through to link_one's SKIP, which prints the remedy.
-  if [ -d "$SKILL_DEST/$sname" ] && [ ! -L "$SKILL_DEST/$sname" ] \
+  standalone=""
+  if [ -d "$SKILL_DEST/$sname" ] \
      && [ -f "$SKILL_DEST/$sname/SKILL.md" ] \
      && [ "$(skill_name_of "$SKILL_DEST/$sname/SKILL.md")" = "$sname" ] \
      && payload_is_complete "${skill_dir%/}" "$SKILL_DEST/$sname"; then
+    if [ ! -L "$SKILL_DEST/$sname" ]; then
+      standalone=yes                               # a copied payload
+    elif ! points_at_repo "$SKILL_DEST/$sname" \
+         && ! { sdest="$(resolve_link "$SKILL_DEST/$sname")" \
+                && looks_like_ours "$sdest" "$SKILL_DEST/$sname"; }; then
+      standalone=yes                               # a symlinked payload (the skills CLI)
+    fi
+  fi
+  if [ -n "$standalone" ]; then
     echo "NOTE: $SKILL_DEST/$sname is already a standalone install of the $sname skill."
     echo "      Leaving it alone. Remove it first if you want this clone symlinked instead."
     skill_ok=$((skill_ok + 1))
