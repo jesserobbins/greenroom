@@ -368,8 +368,11 @@ if [ -n "$install_failed" ]; then
     # our business whoever owns it -- warning about it would tell the user /new is
     # about to fail when it works perfectly well.
     if [ -e "$stale_cmd" ]; then continue; fi
+    # The same remedy link_one gives. A later successful run does NOT repair this:
+    # the command loop does not claim dangling links (these are generic names), so
+    # it would skip this one too. Saying "until this run succeeds" was false.
     echo "     WARNING: $stale_cmd is registered but broken (target gone)."
-    echo "              /$(basename "$cmd" .md) will fail until this run succeeds."
+    echo "              /$(basename "$cmd" .md) stays broken until: rm $stale_cmd && re-run install.sh"
   done
 else
   for cmd in "$REPO_DIR"/commands/*.md; do
@@ -457,11 +460,17 @@ if [ "$cmd_skipped" -gt 0 ]; then
   # user's /new, /add and /sync stay broken until they remove the links.
   cmd_summary="$cmd_summary ($cmd_skipped skipped -- see the SKIPs above)"
 fi
-echo "Done. $skill_summary → $SKILL_DEST; $cmd_summary → $CMD_DEST"
+# The headline must match the outcome. Printing "Done." and then failing on stderr
+# is the mixed signal this was supposed to remove, not a smaller version of it.
+if [ -n "$install_failed" ]; then
+  echo "Incomplete. $skill_summary → $SKILL_DEST; $cmd_summary → $CMD_DEST"
+else
+  echo "Done. $skill_summary → $SKILL_DEST; $cmd_summary → $CMD_DEST"
+fi
 
 # A skill we ship did not get installed. The SKIPs above say what to do; exit
-# non-zero so the failure is not buried under a cheerful "Done." line -- a
-# partial install is a failed install, not a quiet no-op.
+# non-zero so the failure is not buried under a cheerful summary -- a partial
+# install is a failed install, not a quiet no-op.
 if [ -n "$install_failed" ]; then
   if [ "$skill_found" -eq 0 ]; then
     echo "install.sh found no skills under $REPO_DIR/skills/ -- is this a complete clone?" >&2

@@ -1410,8 +1410,16 @@ out28="$(HOME="$swh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc28=0 || rc28=$?
 echo "$out28" | grep -q "not linking the commands" || fail "install.sh linked commands with no skill: $out28"
 echo "$out28" | grep -q "registered but broken" \
   || fail "install.sh left a broken /new registered without a word: $out28"
+# The remedy must be the true one. A later successful run does NOT repair this --
+# the command loop does not claim dangling links -- so "until this run succeeds"
+# would send the user back for a second disappointment.
+echo "$out28" | grep -q "rm $swh/.claude/commands/new.md && re-run" \
+  || fail "install.sh gave a remedy that a successful re-run would not deliver: $out28"
 [ -L "$swh/.claude/commands/new.md" ] || fail "install.sh removed a command link mid-repair"
-ok "already-registered but broken command links are reported when the install fails"
+# A failed run must not head its summary "Done."
+echo "$out28" | grep -q "^Done\." && fail "install.sh printed Done. on a failed run: $out28"
+echo "$out28" | grep -q "^Incomplete\." || fail "install.sh did not head the failed summary Incomplete.: $out28"
+ok "already-registered but broken command links are reported with a remedy that works"
 
 # --- 67. ...but a WORKING link at one of those generic names is none of our
 #          business, whoever owns it. Warning that /new is about to fail when it
