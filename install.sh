@@ -168,7 +168,22 @@ purge_shim_noise() {
 # a second skill lands under skills/ a user who standalone-installed THAT one is
 # not told to remove a working install.
 payload_is_complete() {
-  local entry name inner
+  local entry name inner rel tracked=""
+  # Prefer the TRACKED file list. Deriving the requirement from the working tree
+  # means an editor backup or a __pycache__/ in the installer's own clone becomes
+  # something the user's install must also have -- failing a perfectly good
+  # standalone copy and telling them to remove it. Only tracked files ship.
+  if command -v git >/dev/null 2>&1; then
+    while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
+      tracked=yes
+      [ -e "$2/$rel" ] || return 1
+    done <<GREENROOM_TRACKED
+$(git -C "$1" ls-files 2>/dev/null)
+GREENROOM_TRACKED
+  fi
+  if [ -n "$tracked" ]; then return 0; fi
+  # No git, or an untracked copy of the payload: fall back to the working tree.
   for entry in "$1"/*; do
     [ -e "$entry" ] || continue                  # unmatched glob
     name="$(basename "$entry")"
@@ -487,10 +502,18 @@ if [ -z "$greenroom_ok" ]; then
     [ -f "$cmd" ] || continue
     stale_cmd="$CMD_DEST/$(basename "$cmd")"
     [ -L "$stale_cmd" ] || continue
-    # Only a link that actually DANGLES is broken. A working link here is none of
-    # our business whoever owns it -- warning about it would tell the user /new is
-    # about to fail when it works perfectly well.
-    if [ -e "$stale_cmd" ]; then continue; fi
+    if [ -e "$stale_cmd" ]; then
+      # A working link that is OURS is still a problem: it resolves to a hollow
+      # trigger saying "invoke the greenroom skill", and that skill did not
+      # install. Same use-time failure as a dead link, arriving through a live one.
+      if points_at_repo "$stale_cmd" \
+         || { cdest="$(resolve_link "$stale_cmd")" && looks_like_ours "$cdest" "$stale_cmd"; }; then
+        echo "     NOTE: /$(basename "$cmd" .md) is still registered from an earlier run,"
+        echo "           but the $COMMAND_SKILL skill it invokes is not installed."
+      fi
+      # A working link that is NOT ours is none of our business.
+      continue
+    fi
     # The same remedy link_one gives. A later successful run does NOT repair this:
     # the command loop does not claim dangling links (these are generic names), so
     # it would skip this one too. Saying "until this run succeeds" was false.
