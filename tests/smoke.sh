@@ -848,9 +848,12 @@ ok "context budget holds (description ${desc_len}c, SKILL.md ${skill_words}w)"
 #         `npx skills add` and under every other harness. The path resolver may
 #         probe it, but only with a `:-` default so an unset value degrades to a
 #         miss instead of an empty-prefix path. ---
-bare_ref="$(grep -rn 'CLAUDE_PLUGIN_ROOT' "$REPO_ROOT/skills/" | grep -v 'CLAUDE_PLUGIN_ROOT:-' || true)"
+# Matches a PATH BUILT from the variable -- `${CLAUDE_PLUGIN_ROOT}` or a bare
+# `$CLAUDE_PLUGIN_ROOT/` -- while leaving prose that merely names it alone. The
+# `:-` form is excluded by the `[^:]` after the name.
+bare_ref="$(grep -rnE '\$\{CLAUDE_PLUGIN_ROOT[^:]|\$CLAUDE_PLUGIN_ROOT/' "$REPO_ROOT/skills/" || true)"
 [ -z "$bare_ref" ] \
-  || fail "skills/ uses \${CLAUDE_PLUGIN_ROOT} without a :- default (undefined on a standalone install): $bare_ref"
+  || fail "skills/ builds a path from \${CLAUDE_PLUGIN_ROOT} with no :- default (undefined on a standalone install): $bare_ref"
 ok "skill content relies on no plugin-only path variable"
 
 # --- 32. commands stay hollow. They are Claude-Code-only sugar; `npx skills` never
@@ -921,7 +924,7 @@ ln -s "$ug/somewhere-else" "$ug/.claude/skills/greenroom"        # user's own sy
 out4="$(HOME="$ug" bash "$REPO_ROOT/install.sh" 2>&1)" && rc=0 || rc=$?
 # An install that installed no skill is a failed install, not a quiet no-op.
 [ "$rc" -ne 0 ] || fail "install.sh reported success after installing no skill: $out4"
-echo "$out4" | grep -q "installed no skills" || fail "install.sh did not say it installed nothing: $out4"
+echo "$out4" | grep -q "installed 0 of 1 skill" || fail "install.sh did not say it installed nothing: $out4"
 echo "$out4" | grep -q "re-run install.sh" || fail "install.sh skipped without telling the user how to recover: $out4"
 [ ! -e "$ug/somewhere-else/SKILL.md" ] || fail "install.sh wrote THROUGH the unrelated symlink into the user's dir"
 [ -L "$ug/.claude/skills/greenroom" ] || fail "install.sh removed an unrelated user symlink at the skill path"
@@ -1001,7 +1004,27 @@ echo "$out6" | grep -q "SKIP skill greenroom" && fail "install.sh skipped a dang
 echo "$out6" | grep -q "dangling" || fail "install.sh replaced a dangling link without saying so: $out6"
 ok "a dangling link at the skill path is replaced, with a distinct message"
 
-# --- 43. the SKILL.md path resolver actually resolves. It is the ONLY thing that
+# --- 43. re-cloning greenroom somewhere new and re-installing is a normal upgrade
+#          path. The old clone is still on disk, so the link is neither ours-by-
+#          $REPO_DIR nor dangling -- keying ownership to $REPO_DIR alone turned that
+#          into a hard failure that installed nothing. ---
+rc_old="$T/oldclone"
+mkdir -p "$rc_old"
+cp -R "$REPO_ROOT/skills" "$REPO_ROOT/commands" "$REPO_ROOT/.claude-plugin" "$rc_old/"
+rch="$T/reclonehome"
+mkdir -p "$rch/.claude/skills" "$rch/.claude/commands"
+ln -s "$rc_old/skills/greenroom" "$rch/.claude/skills/greenroom"       # link from the OTHER clone
+ln -s "$rc_old/commands/new.md" "$rch/.claude/commands/new.md"
+out7="$(HOME="$rch" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh failed re-installing from a new clone: $out7"
+[ "$(readlink "$rch/.claude/skills/greenroom")" = "$REPO_ROOT/skills/greenroom" ] \
+  || fail "the skill link was not repointed at the current clone"
+[ "$(readlink "$rch/.claude/commands/new.md")" = "$REPO_ROOT/commands/new.md" ] \
+  || fail "the command link was not repointed at the current clone"
+echo "$out7" | grep -q "repointed" || fail "install.sh repointed silently: $out7"
+echo "$out7" | grep -q "SKIP skill greenroom" && fail "install.sh treated another greenroom clone as a user symlink: $out7"
+ok "re-installing from a second clone repoints the links instead of hard-failing"
+
+# --- 44. the SKILL.md path resolver actually resolves. It is the ONLY thing that
 #          tells an agent where greenroom.py lives now that the commands are hollow,
 #          and it is prose -- nothing else would catch it drifting out of sync with
 #          the install shapes we ship. Extract the snippet and run it for each. ---
@@ -1043,6 +1066,17 @@ case "$got" in
   */greenroom/0.2.0/skills/greenroom/scripts/greenroom.py) ;;
   *) fail "resolver picked $got from the plugin cache; expected the newest version (0.2.0)" ;;
 esac
+# shape 3b: cache AND a global ~/.claude/skills copy present. $CLAUDE_PLUGIN_ROOT
+#           is not exported into Bash-tool shells, so the cache IS the plugin path
+#           -- a leftover manual clone must not shadow it.
+mkdir -p "$pc/.claude/skills"
+cp -R "$REPO_ROOT/skills/greenroom" "$pc/.claude/skills/greenroom"
+got="$( cd "$T" && HOME="$pc" CLAUDE_PLUGIN_ROOT="" bash "$resolver" )" \
+  || fail "the SKILL.md resolver failed with both a cache and a global install present"
+case "$got" in
+  */plugins/cache/*) ;;
+  *) fail "a global ~/.claude/skills copy shadowed the plugin cache (picked $got)" ;;
+esac
 # a payload that lost its exec bit in transit must still resolve
 chmod -x "$proj/.claude/skills/greenroom/scripts/greenroom.py"
 ( cd "$proj" && HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash "$resolver" ) >/dev/null \
@@ -1053,7 +1087,7 @@ chmod -x "$proj/.claude/skills/greenroom/scripts/greenroom.py"
   && fail "the SKILL.md resolver reported success with no greenroom installed anywhere"
 ok "the SKILL.md path resolver finds the script in every install shape we ship"
 
-# --- 44. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+# --- 45. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
 "$SCRIPT" new markproj --parent "$T/mark" >/dev/null
 gm="$T/mark/markproj/.greenroom"
@@ -1074,7 +1108,7 @@ rm -f "$gm"
 [ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
 ok "sync adds .greenroom to a wrapper that lacks it"
 
-# --- 45. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+# --- 46. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
 fhm="$T/markforbid"
 mkdir -p "$fhm"
 mkrepo "$fhm/repo-public"
@@ -1086,7 +1120,7 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
-# --- 46. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# --- 47. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
 # GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
 # .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
 mkdir -p "$T/nows"
@@ -1122,7 +1156,7 @@ ok "--workspace forces the workspace file regardless of detection"
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
 
-# --- 47. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+# --- 48. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
 mkdir -p "$T/vscode"
 GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
 vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
@@ -1131,5 +1165,16 @@ mkdir -p "$T/vscode/vscodeproj/.vscode"
 ( cd "$T/vscode/vscodeproj/vscodeproj-public" && GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" sync ) >/dev/null
 [ -f "$vws" ] || fail "a present .vscode/ dir did not trigger the workspace write"
 ok "detection writes the workspace when .vscode/ exists even with no family binary"
+
+# --- 49. the block numbers themselves are unique and sequential. Inserting a test
+#          mid-file has collided the numbering twice now; duplicate identifiers make
+#          a failure ambiguous to triage, and nothing else notices. ---
+nums="$(grep -o '^# --- [0-9]*\.' "$0" | grep -o '[0-9]*')"
+dupes="$(printf '%s\n' "$nums" | sort -n | uniq -d | tr '\n' ' ')"
+[ -z "$(echo "$dupes" | tr -d ' ')" ] || fail "duplicate test block numbers: $dupes"
+expected="$(seq 1 "$(printf '%s\n' "$nums" | wc -l | tr -d ' ')")"
+[ "$(printf '%s\n' "$nums" | sort -n | tr '\n' ' ')" = "$(printf '%s\n' "$expected" | tr '\n' ' ')" ] \
+  || fail "test block numbers are not a gapless 1..N sequence"
+ok "test block numbers are unique and sequential"
 
 echo "all $pass checks passed"

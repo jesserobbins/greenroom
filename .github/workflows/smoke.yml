@@ -1,0 +1,33 @@
+name: smoke
+
+# tests/smoke.sh is the only guard on the distribution shape -- the payload's
+# self-sufficiency, the context budget, the hollow commands, the SKILL.md path
+# resolver, and install.sh's ownership-checked migrations. Left to local runs,
+# every one of those guarantees depends on a developer remembering.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      # Without PyYAML the frontmatter test degrades to a name-only regex check.
+      # CI is where the full parse should run.
+      - run: python3 -m pip install --upgrade pyyaml
+      - name: git identity for the throwaway repos the suite scaffolds
+        run: |
+          git config --global user.email "smoke@example.invalid"
+          git config --global user.name "smoke"
+          git config --global init.defaultBranch main
+      - run: tests/smoke.sh

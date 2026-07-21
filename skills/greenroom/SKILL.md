@@ -42,9 +42,9 @@ manual clone), so resolve it first and reuse `$greenroom` for every call:
 greenroom=""
 for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" \
          "$PWD/.claude/skills/greenroom" \
-         "$HOME/.claude/skills/greenroom" \
          "$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom \
-            2>/dev/null | sort -V | tail -1)"; do
+            2>/dev/null | sort -V | tail -1)" \
+         "$HOME/.claude/skills/greenroom"; do
   if [ -n "$c" ] && [ -f "$c/scripts/greenroom.py" ]; then
     greenroom="$c/scripts/greenroom.py"; break
   fi
@@ -54,9 +54,16 @@ python3 "$greenroom" <subcommand> [args]
 ```
 
 `npx skills add` without `-g` installs into the *project*, which is why the
-`$PWD` tier comes before the global ones. The cache tier is version-sorted so the
-newest cached plugin wins, and the script runs through `python3` so a payload
-that lost its exec bit in transit still works.
+`$PWD` tier comes first after the env var. The plugin cache outranks
+`~/.claude/skills` because `$CLAUDE_PLUGIN_ROOT` is not exported into Bash-tool
+shells, so the cache *is* the plugin path — a leftover manual clone must not
+shadow it. The cache tier is version-sorted so the newest cached plugin wins, and
+the script runs through `python3` so a payload that lost its exec bit in transit
+still works.
+
+After a `new` or `retrofit` run, surface any plugin-config warning and any
+stale-cwd note **verbatim** — those are the only steps the user must act on by
+hand. `references/operations.md` has the rest.
 
 If that loop leaves `$greenroom` empty, this skill was loaded from a path none of
 those cover — locate `scripts/greenroom.py` under the directory this file was

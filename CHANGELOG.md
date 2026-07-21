@@ -10,6 +10,11 @@ reaches a stable release.
 ## [0.2.0-alpha] - 2026-07-21
 
 ### Added
+- A GitHub Actions workflow runs `tests/smoke.sh` on every push and PR, on Linux
+  and macOS, with PyYAML installed so the frontmatter check takes the full parse
+  rather than its degraded name-only fallback. The suite is the only guard on the
+  distribution shape; leaving it to local runs left every guarantee resting on a
+  developer remembering.
 - greenroom installs as a standalone skill on any agent:
   `npx skills add jesserobbins/greenroom`. The `skills/greenroom/` directory is
   now self-sufficient — it carries its own `scripts/` and `templates/` — because
@@ -59,6 +64,11 @@ reaches a stable release.
   links become dangling the moment the clone is moved, skipping them made a
   re-run from the relocated clone silently install nothing, and a stale one left
   the retired skill name registered forever.
+- Re-installing from a second clone repoints the links instead of hard-failing.
+  Ownership was proven only against the current `$REPO_DIR`, so a link from an
+  older clone that still existed on disk was neither ours nor dangling: the run
+  skipped it and exited non-zero. A link into any directory that declares itself
+  a greenroom payload is now recognized and repointed.
 - An install that installs no skill now exits non-zero and prints the remedy,
   instead of reporting `Done. 0 skill(s)` and leaving the user's `/greenroom`
   quietly pointing at an older clone.

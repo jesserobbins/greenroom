@@ -135,8 +135,8 @@ If design docs or notes already landed in the public repo, `collect` pulls them 
 
 ```
 cd <parent>/<project>-public
-~/.claude/skills/greenroom/scripts/greenroom.py collect          # dry-run, prints the plan
-~/.claude/skills/greenroom/scripts/greenroom.py collect --apply  # copy into <project>-private/
+python3 ~/.claude/skills/greenroom/scripts/greenroom.py collect          # dry-run, prints the plan
+python3 ~/.claude/skills/greenroom/scripts/greenroom.py collect --apply  # copy into <project>-private/
 ```
 
 It scans two sources: files on the default branch that match private-shaped path rules (`docs/design/**`, `**/architecture.md`, `**/rfc-*.md`, and the like), and files reachable from unmerged branches whose names start with `design/`, `notes/`, `drafts/`, or `private/`. It reads each file from git history and writes a copy into the private dir. Public history is never rewritten. Review the plan, then re-run with `--apply` and commit when you are ready.

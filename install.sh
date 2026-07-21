@@ -53,14 +53,42 @@ points_at_repo_root() {
   [ "$dest" = "$REPO_DIR" ]
 }
 
+# looks_like_ours <resolved-target> <link-path>: true if the target is a payload
+# this installer produces, even from a DIFFERENT greenroom checkout. Re-cloning
+# elsewhere and re-installing is a normal upgrade path; keying ownership to
+# $REPO_DIR alone made it a hard failure, since the old clone is still on disk
+# and so the link is neither ours nor dangling.
+looks_like_ours() {
+  local dest="$1" name manifest
+  name="$(basename "$2")"
+  if [ -d "$dest" ]; then                            # a skill dir declaring itself
+    if [ -f "$dest/SKILL.md" ] && grep -q "^name:[[:space:]]*${name}[[:space:]]*\$" "$dest/SKILL.md"; then
+      return 0
+    fi
+  elif [ -f "$dest" ]; then                          # a command file from a greenroom checkout
+    case "$dest" in
+      */commands/"$name")
+        manifest="$(dirname "$(dirname "$dest")")/.claude-plugin/plugin.json"
+        if [ -f "$manifest" ] && grep -q '"name"[[:space:]]*:[[:space:]]*"greenroom"' "$manifest"; then
+          return 0
+        fi
+        ;;
+    esac
+  fi
+  return 1
+}
+
 # link <target> <link-path> <label>: refresh our own symlinks, never clobber
 # anything the user owns -- neither a real file nor a symlink of their own.
 # Sets `link_result` to "linked" or "skip".
 link_one() {
-  local target="$1" link="$2" label="$3"
+  local target="$1" link="$2" label="$3" dest
   if [ -L "$link" ]; then
     if points_at_repo "$link"; then
       rm "$link"                                   # our own link: refresh it
+    elif dest="$(resolve_link "$link")" && looks_like_ours "$dest" "$link"; then
+      rm "$link"                                   # another greenroom checkout: repoint
+      echo "repointed $label from another greenroom checkout at $dest"
     elif [ ! -e "$link" ]; then
       # Dangling. Our own link looks exactly like this after the clone is moved
       # or renamed, and ownership can no longer be proven -- but nobody is served
@@ -160,10 +188,10 @@ done
 
 echo "Done. $skill_linked skill(s) → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
 
-# Every skill was skipped. The SKIPs above say what to do; exit non-zero so the
-# failure is not buried under a cheerful "Done." line -- an install that installed
-# nothing is a failed install, not a quiet no-op.
-if [ "$skill_found" -gt 0 ] && [ "$skill_linked" -eq 0 ]; then
-  echo "install.sh installed no skills. See the SKIP notes above." >&2
+# A skill we ship did not get installed. The SKIPs above say what to do; exit
+# non-zero so the failure is not buried under a cheerful "Done." line -- a
+# partial install is a failed install, not a quiet no-op.
+if [ "$skill_linked" -lt "$skill_found" ]; then
+  echo "install.sh installed $skill_linked of $skill_found skill(s). See the SKIP notes above." >&2
   exit 1
 fi
