@@ -192,6 +192,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   SHIM_NOISE=".DS_Store Thumbs.db .localized"
   shim_is_ours=""
   shim_has_extras=""
+  shim_dangling=""
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
     ename="$(basename "$entry")"
@@ -204,8 +205,14 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       scripts|templates)
         if points_at_repo "$entry"; then
           shim_is_ours=yes
-        elif [ -L "$entry" ] && [ ! -e "$entry" ]; then
+        elif [ -L "$entry" ] && [ ! -e "$entry" ] \
+             && [ "$(basename "$(readlink "$entry")")" = "$ename" ]; then
+          # Dangling. Ours pointed at <clone>/scripts or <clone>/templates, so the
+          # target's basename matches the entry name. A user's own link on an
+          # unmounted volume (-> /Volumes/ext/my-scripts) does not, and is left to
+          # the extras branch rather than silently deleted.
           shim_is_ours=yes
+          shim_dangling="$shim_dangling $ename -> $(readlink "$entry")"
         elif edest="$(resolve_link "$entry")" && is_greenroom_checkout "$(dirname "$edest")"; then
           shim_is_ours=yes                               # a link into ANOTHER live checkout
         else
@@ -227,12 +234,17 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
     for n in $SHIM_NOISE; do rm -f "$OLD_SHIM/$n"; done
     rmdir "$OLD_SHIM"
     echo "migrated: removed the old script-root shim at $OLD_SHIM"
+    # Name what was dropped: a dangling link is removed on inference, not proof,
+    # so the user should be able to see exactly what went.
+    if [ -n "$shim_dangling" ]; then echo "     (dead links removed:$shim_dangling)"; fi
   elif [ -n "$shim_is_ours" ]; then
     echo "SKIP migration: $OLD_SHIM holds files we did not create (leaving it untouched)"
     echo "     the skill cannot be linked over a real directory -- move what you want to keep"
     echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
   else
     echo "SKIP migration: $OLD_SHIM is a directory we do not recognize (leaving it untouched)"
+    echo "     the skill cannot be linked over a real directory -- move what you want to keep"
+    echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
   fi
 fi
 

@@ -1001,6 +1001,8 @@ out9="$(HOME="$dsm" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh fail
 [ -L "$dsm/.claude/skills/greenroom" ] || fail "the dangling shim was not replaced by the skill symlink"
 [ -f "$dsm/.claude/skills/greenroom/SKILL.md" ] || fail "post-migration greenroom link has no SKILL.md"
 echo "$out9" | grep -q "do not recognize" && fail "install.sh called our own dangling shim foreign: $out9"
+# Claimed by inference, not proof -- so say what was dropped.
+echo "$out9" | grep -q "dead links removed" || fail "install.sh removed dead links without naming them: $out9"
 ok "a shim whose clone was deleted is still recognized and migrated"
 
 # --- 41. ...and a shim whose links point into ANOTHER LIVE checkout. Upgrading by
@@ -1019,7 +1021,34 @@ out16="$(HOME="$osm" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh fai
 echo "$out16" | grep -q "do not recognize" && fail "install.sh called a shim into another checkout foreign: $out16"
 ok "a shim pointing into another live checkout is migrated, not called foreign"
 
-# --- 42. OS noise must not fail the install. A Finder-created .DS_Store in the old
+# --- 42. a dangling shim entry is claimed by INFERENCE, not proof, so the inference
+#          must be narrow and the removal visible. Ours pointed at <clone>/scripts,
+#          so the target's basename matches the entry name; a user's own link to an
+#          unmounted volume does not, and must survive. ---
+fsh="$T/foreignshimhome"
+mkdir -p "$fsh/.claude/skills/greenroom"
+ln -s "/Volumes/ext-that-is-not-mounted/my-scripts" "$fsh/.claude/skills/greenroom/scripts"
+out18="$(HOME="$fsh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc18=0 || rc18=$?
+[ -L "$fsh/.claude/skills/greenroom/scripts" ] \
+  || fail "install.sh deleted a user's dangling link just because it was named scripts"
+[ "$rc18" -ne 0 ] || fail "install.sh reported success while blocked by a foreign shim: $out18"
+echo "$out18" | grep -q "do not recognize" || fail "install.sh did not report the unrecognized shim: $out18"
+echo "$out18" | grep -q "re-run install.sh" || fail "the unrecognized-shim SKIP gave no way to recover: $out18"
+ok "a foreign dangling link at the shim path survives, with a recoverable SKIP"
+
+# --- 43. a real scripts/ DIRECTORY at the shim path is not a link we made. Nothing
+#          covered this branch, and it printed a bare SKIP followed by exit 1. ---
+rdh="$T/realdirshimhome"
+mkdir -p "$rdh/.claude/skills/greenroom/scripts"
+: > "$rdh/.claude/skills/greenroom/scripts/mine.sh"
+out19="$(HOME="$rdh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc19=0 || rc19=$?
+[ -f "$rdh/.claude/skills/greenroom/scripts/mine.sh" ] || fail "install.sh destroyed a real user directory"
+[ "$rc19" -ne 0 ] || fail "install.sh reported success while blocked by a real directory: $out19"
+echo "$out19" | grep -q "do not recognize" || fail "install.sh did not report the unrecognized directory: $out19"
+echo "$out19" | grep -q "move what you want to keep" || fail "the unrecognized-dir SKIP gave no remedy: $out19"
+ok "a real directory at the shim path is left alone with a recoverable SKIP"
+
+# --- 44. OS noise must not fail the install. A Finder-created .DS_Store in the old
 #          shim is invisible to `ls`, and classifying it as "a file we did not
 #          create" blocks the migration, then the skill link, then the whole run. ---
 dsm2="$T/dsstorehome"
@@ -1030,7 +1059,7 @@ out10="$(HOME="$dsm2" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh fa
 [ -L "$dsm2/.claude/skills/greenroom" ] || fail "a .DS_Store blocked the shim migration"
 ok "OS noise in the old shim does not block the migration"
 
-# --- 43. an EMPTY ~/.claude/skills/greenroom (a partially cleaned or interrupted
+# --- 45. an EMPTY ~/.claude/skills/greenroom (a partially cleaned or interrupted
 #          prior install) is unambiguously safe to rmdir, and leaving it blocked
 #          the skill link and failed the run. ---
 emh="$T/emptydirhome"
@@ -1039,7 +1068,7 @@ out11="$(HOME="$emh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh fai
 [ -L "$emh/.claude/skills/greenroom" ] || fail "an empty greenroom dir was not removed and relinked"
 ok "an empty greenroom directory is removed rather than treated as foreign"
 
-# --- 44. a shim holding ONLY OS noise -- the links already cleaned up, a .DS_Store
+# --- 46. a shim holding ONLY OS noise -- the links already cleaned up, a .DS_Store
 #          left behind -- is the empty case wearing a hat. Classifying it as
 #          unrecognized failed the run over a file the user cannot see. ---
 noh="$T/noiseonlyhome"
@@ -1049,7 +1078,7 @@ out12="$(HOME="$noh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh fai
 [ -L "$noh/.claude/skills/greenroom" ] || fail "a noise-only greenroom dir was not removed and relinked"
 ok "a greenroom directory holding only OS noise is removed, like an empty one"
 
-# --- 45. a COPIED greenroom-setup payload (from `npx skills add ...@greenroom-setup`)
+# --- 47. a COPIED greenroom-setup payload (from `npx skills add ...@greenroom-setup`)
 #          is not a link we made, so it is not ours to delete -- but left silent the
 #          retired name resolves forever, which is what migration 2 exists to stop. ---
 cph="$T/copiedsetuphome"
@@ -1062,7 +1091,7 @@ echo "$out13" | grep -q "retired greenroom-setup skill" \
   || fail "install.sh left a copied greenroom-setup registered without a word: $out13"
 ok "a copied greenroom-setup install is reported, not silently left or deleted"
 
-# --- 46. the ancient ROOT symlink is ours whether it points at this clone or
+# --- 48. the ancient ROOT symlink is ours whether it points at this clone or
 #          another. A repo root holds no SKILL.md, so looks_like_ours cannot see
 #          it -- without the plugin-manifest tell, a user on the oldest layout who
 #          re-cloned elsewhere hit "symlink into somewhere else" and exit 1. ---
@@ -1080,7 +1109,7 @@ out14="$(HOME="$orh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh fai
 [ -f "$orc/.claude-plugin/plugin.json" ] || fail "migration deleted the other checkout, not just the link"
 ok "an old root symlink into another checkout is migrated too"
 
-# --- 47. migration 2 also drops a DANGLING greenroom-setup link. The old clone was
+# --- 49. migration 2 also drops a DANGLING greenroom-setup link. The old clone was
 #          deleted, so ownership cannot be proven -- but leaving it keeps the retired
 #          skill name registered forever, and link_one already applies exactly this
 #          reasoning at the skill path. The two paths must not disagree. ---
@@ -1092,7 +1121,7 @@ HOME="$dsh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh err
   || fail "a dangling greenroom-setup link survived migration, keeping the retired name registered"
 ok "a dangling greenroom-setup link is migrated away like any other stale link"
 
-# --- 48. migration 2 also drops a greenroom-setup link into a DIFFERENT checkout
+# --- 50. migration 2 also drops a greenroom-setup link into a DIFFERENT checkout
 #          that still exists. Keyed to $REPO_DIR alone it was neither ours nor
 #          dangling, so after a re-clone the retired skill name stayed registered
 #          forever -- the exact failure this migration exists to prevent. ---
@@ -1109,7 +1138,7 @@ HOME="$osh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh err
 [ -f "$old_ck/skills/greenroom-setup/SKILL.md" ] || fail "migration deleted the other checkout's files, not just the link"
 ok "a greenroom-setup link into another live checkout is migrated away too"
 
-# --- 49. ...including the 0.1.4-0.1.7 shape, where ~/.claude/skills/greenroom-setup
+# --- 51. ...including the 0.1.4-0.1.7 shape, where ~/.claude/skills/greenroom-setup
 #          pointed at <checkout>/skills/SETUP, declaring `name: setup`. Matching the
 #          target's name against the LINK's basename misses it, so the retired name
 #          survived a re-clone in silence. ---
@@ -1126,7 +1155,7 @@ HOME="$lsh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh err
 [ -f "$leg_ck/skills/setup/SKILL.md" ] || fail "migration deleted the other checkout's files, not just the link"
 ok "the pre-rename skills/setup link shape is migrated away too"
 
-# --- 50. a checkout with NO skills at all is a partial or corrupt clone, not a
+# --- 52. a checkout with NO skills at all is a partial or corrupt clone, not a
 #          successful install of nothing. "0 of 0" satisfied `linked -lt found`, so
 #          it printed Done., linked the hollow commands, and exited 0. ---
 noskills="$T/noskillsclone"
@@ -1142,7 +1171,7 @@ out15="$(HOME="$nsh" bash "$noskills/install.sh" 2>&1)" && rc15=0 || rc15=$?
 echo "$out15" | grep -q "found no skills" || fail "install.sh did not name the cause: $out15"
 ok "a checkout with no skills fails loudly instead of installing nothing cheerfully"
 
-# --- 51. a COPIED greenroom at the skill path is a standalone install (`npx skills
+# --- 53. a COPIED greenroom at the skill path is a standalone install (`npx skills
 #          add -g`), not an obstacle. It is a real directory, so link_one SKIPped it
 #          and the run exited 1 -- telling a user who installed the README's headline
 #          way to remove a perfectly good install of greenroom. ---
@@ -1156,7 +1185,7 @@ echo "$out17" | grep -q "already a standalone install" || fail "install.sh did n
 [ -e "$cgh/.claude/commands/new.md" ] || fail "the commands were withheld even though the skill is present"
 ok "a standalone install at the skill path is reported and left alone, not a failure"
 
-# --- 52. ownership checks resolve RELATIVE symlink targets. An install whose links
+# --- 54. ownership checks resolve RELATIVE symlink targets. An install whose links
 #          were made from inside ~/.claude/skills (so the target is relative) is
 #          still ours, and must be migrated rather than mistaken for a user link. ---
 rh="$T/relhome"
@@ -1173,7 +1202,7 @@ HOME="$rh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh erro
   || fail "a relative-target root symlink was left exposing the plugin manifest"
 ok "ownership checks resolve relative symlink targets, not just absolute ones"
 
-# --- 53. a DANGLING link at the skill path is replaced, not skipped. This is what
+# --- 55. a DANGLING link at the skill path is replaced, not skipped. This is what
 #          our own link becomes once the clone is moved or renamed: ownership can no
 #          longer be proven, but a dead link helps nobody and a link the user
 #          actively uses is not dangling. Skipping here would make a re-run from
@@ -1187,7 +1216,7 @@ echo "$out6" | grep -q "SKIP skill greenroom" && fail "install.sh skipped a dang
 echo "$out6" | grep -q "dangling" || fail "install.sh replaced a dangling link without saying so: $out6"
 ok "a dangling link at the skill path is replaced, with a distinct message"
 
-# --- 54. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
+# --- 56. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
 #          user may have bound to their own repo, and a target on an unmounted
 #          volume or a moved clone reads as dangling too. The claim only holds for
 #          a path named for us. ---
@@ -1201,7 +1230,7 @@ echo "$out8" | grep -q "SKIP command new.md" || fail "install.sh did not report 
 [ -L "$dch/.claude/skills/greenroom" ] || fail "the skill itself was not installed"
 ok "a dangling link at a generic command name is left alone, unlike the skill path"
 
-# --- 55. re-cloning greenroom somewhere new and re-installing is a normal upgrade
+# --- 57. re-cloning greenroom somewhere new and re-installing is a normal upgrade
 #          path. The old clone is still on disk, so the link is neither ours-by-
 #          $REPO_DIR nor dangling -- keying ownership to $REPO_DIR alone turned that
 #          into a hard failure that installed nothing. ---
@@ -1221,7 +1250,7 @@ echo "$out7" | grep -q "repointed" || fail "install.sh repointed silently: $out7
 echo "$out7" | grep -q "SKIP skill greenroom" && fail "install.sh treated another greenroom clone as a user symlink: $out7"
 ok "re-installing from a second clone repoints the links instead of hard-failing"
 
-# --- 56. the SKILL.md path resolver actually resolves. It is the ONLY thing that
+# --- 58. the SKILL.md path resolver actually resolves. It is the ONLY thing that
 #          tells an agent where greenroom.py lives now that the commands are hollow,
 #          and it is prose -- nothing else would catch it drifting out of sync with
 #          the install shapes we ship. Extract the snippet and run it for each. ---
@@ -1251,6 +1280,7 @@ got="$( cd "$proj" && HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash "$resolver"
 # collect and into the repo to wrap for retrofit, so a literal $PWD tier with no
 # walk-up would silently fall through to a stale global copy.
 mkdir -p "$proj/sub/deeper"
+git -C "$proj" init -q                    # a real project has a boundary marker
 got="$( cd "$proj/sub/deeper" && HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash "$resolver" )" \
   || fail "the SKILL.md resolver failed from a subdirectory of a project-local install"
 [ "$got" = "$proj/.claude/skills/greenroom/scripts/greenroom.py" ] \
@@ -1291,6 +1321,16 @@ mkdir -p "$anc/GitHub/.claude/skills" "$anc/GitHub/myproj/src" \
 cp -R "$REPO_ROOT/skills/greenroom" "$anc/GitHub/.claude/skills/greenroom"
 cp -R "$REPO_ROOT/skills/greenroom" "$anc/.claude/plugins/cache/jesserobbins/greenroom/9.9.9/skills/greenroom"
 git -C "$anc/GitHub/myproj" init -q                       # the project boundary
+# ...and the same with NO boundary marker anywhere on the way up, which is the
+# state `new <name>` runs in ("from the intended parent dir"). Without requiring a
+# project root, the walk sails past ~/GitHub and takes the stale copy.
+mkdir -p "$anc/GitHub/newproj-parent"
+got="$( cd "$anc/GitHub/newproj-parent" && HOME="$anc" CLAUDE_PLUGIN_ROOT="" bash "$resolver" )" \
+  || fail "the SKILL.md resolver failed from an unmarked parent dir"
+case "$got" in
+  */plugins/cache/*) ;;
+  *) fail "an unrelated ancestor won from an unmarked cwd chain (picked $got)" ;;
+esac
 got="$( cd "$anc/GitHub/myproj/src" && HOME="$anc" CLAUDE_PLUGIN_ROOT="" bash "$resolver" )" \
   || fail "the SKILL.md resolver failed below an unrelated ancestor install"
 case "$got" in
@@ -1365,7 +1405,7 @@ chmod -x "$proj/.claude/skills/greenroom/scripts/greenroom.py"
   && fail "the SKILL.md resolver reported success with no greenroom installed anywhere"
 ok "the SKILL.md path resolver finds the script in every install shape we ship"
 
-# --- 57. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+# --- 59. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
 "$SCRIPT" new markproj --parent "$T/mark" >/dev/null
 gm="$T/mark/markproj/.greenroom"
@@ -1386,7 +1426,7 @@ rm -f "$gm"
 [ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
 ok "sync adds .greenroom to a wrapper that lacks it"
 
-# --- 58. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+# --- 60. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
 fhm="$T/markforbid"
 mkdir -p "$fhm"
 mkrepo "$fhm/repo-public"
@@ -1398,7 +1438,7 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
-# --- 59. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# --- 61. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
 # GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
 # .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
 mkdir -p "$T/nows"
@@ -1434,7 +1474,7 @@ ok "--workspace forces the workspace file regardless of detection"
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
 
-# --- 60. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+# --- 62. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
 mkdir -p "$T/vscode"
 GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
 vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
@@ -1444,7 +1484,7 @@ mkdir -p "$T/vscode/vscodeproj/.vscode"
 [ -f "$vws" ] || fail "a present .vscode/ dir did not trigger the workspace write"
 ok "detection writes the workspace when .vscode/ exists even with no family binary"
 
-# --- 61. the block numbers themselves are unique and sequential. Inserting a test
+# --- 63. the block numbers themselves are unique and sequential. Inserting a test
 #          mid-file has collided the numbering twice now; duplicate identifiers make
 #          a failure ambiguous to triage, and nothing else notices. ---
 nums="$(grep -o '^# --- [0-9]*\.' "$0" | grep -o '[0-9]*')"
@@ -1455,7 +1495,7 @@ expected="$(seq 1 "$(printf '%s\n' "$nums" | wc -l | tr -d ' ')")"
   || fail "test block numbers are not a gapless 1..N sequence"
 ok "test block numbers are unique and sequential"
 
-# --- 62. every `## [x.y.z]` changelog heading has its reference-link definition.
+# --- 64. every `## [x.y.z]` changelog heading has its reference-link definition.
 #          Without one the heading renders with literal brackets on GitHub, which
 #          is invisible in the diff and only shows up on the released page. ---
 missing=""

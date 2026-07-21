@@ -41,7 +41,10 @@ further; greenroom then refuses to operate at or above it.
 - **Idempotent re-runs**: if the source path is already inside its target parent
   structure, the script detects this and only adds the missing private dir. It
   recognizes both the canonical `<project>-private/` and legacy `private/` as
-  already-existing.
+  already-existing. **On a second `retrofit`, point at the `<project>-public/`
+  dir** (e.g. `~/src/<name>/<name>-public`), not the path you used the first
+  time: after the first run the wrapper is no longer a git repo, so the original
+  path is rejected.
 - **Legacy `private/` dir**: if a wrapper already has a plain `private/`, a
   retrofit leaves it where it is and prints a hint to rename it. To migrate,
   rename the directory (`mv private <project>-private`) and, if a

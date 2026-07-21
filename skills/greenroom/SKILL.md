@@ -44,8 +44,14 @@ manual clone), so resolve it first and reuse `$greenroom` for every call:
 # here would let a global install win the PROJECT tier and shadow the cache below.
 proj=""; d="$PWD"
 while [ -n "$d" ] && [ "$d" != "/" ] && [ "$d" != "$HOME" ]; do
-  if [ -f "$d/.claude/skills/greenroom/scripts/greenroom.py" ]; then
-    proj="$d/.claude/skills/greenroom"; break
+  # Only count a hit at the directory you started in, or at a real project root.
+  # Otherwise any ancestor that happens to hold a stale .claude/ outranks the
+  # plugin cache -- and `new` is documented as running from a plain parent dir,
+  # where nothing on the way up is a project at all.
+  if [ "$d" = "$PWD" ] || [ -e "$d/.git" ] || [ -e "$d/.greenroom" ]; then
+    if [ -f "$d/.claude/skills/greenroom/scripts/greenroom.py" ]; then
+      proj="$d/.claude/skills/greenroom"; break
+    fi
   fi
   # Stop at the project boundary: above it a stray .claude/ belongs to something
   # else and must not outrank the plugin cache. Exception: a greenroom wrapper
@@ -74,7 +80,9 @@ subcommands want you in a specific directory, and the project-local tier is
 relative to where you start.
 
 `npx skills add` without `-g` installs into the *project*, which is why the
-walked-up project tier comes first after the env var. The plugin cache outranks
+walked-up project tier comes first after the env var — counting only your own
+directory and real project roots above it, never an unrelated ancestor that
+happens to hold a `.claude/`. The plugin cache outranks
 `~/.claude/skills` because `$CLAUDE_PLUGIN_ROOT` is not exported into Bash-tool
 shells, so the cache *is* the plugin path — a leftover manual clone must not
 shadow it. That tier sorts on the version directory alone, so a second cached
