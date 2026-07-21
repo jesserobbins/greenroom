@@ -118,6 +118,7 @@ looks_like_ours() {
 # frontmatter, no name.
 skill_name_of() {
   awk '
+    { sub(/\r$/, "") }                 # a CRLF checkout must not read as "no frontmatter"
     NR == 1 { if ($0 != "---") exit; next }
     /^---[[:space:]]*$/ { exit }
     /^name:/ { sub(/^name:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }
@@ -265,10 +266,14 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   if [ "$shim_dangle_n" -eq 2 ] \
      && [ "${shim_dangle_parents[0]}" = "${shim_dangle_parents[1]}" ]; then
     shim_is_ours=yes
-  elif [ "$shim_dangle_n" -gt 0 ]; then
+  elif [ "$shim_dangle_n" -gt 0 ] && [ -z "$shim_is_ours" ]; then
     shim_has_extras=yes                                  # unpaired: not ours to judge
     shim_dangling=""
   fi
+  # One link proven ours and its sibling merely dangling is still ours -- that is a
+  # plain in-place upgrade where git could not remove one of the old directories
+  # (an untracked .DS_Store inside is enough), so one link stayed live and the
+  # other died. Calling that "files we did not create" aborted the upgrade.
   if [ -z "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
     # Empty, or nothing but OS noise -- a partially cleaned or interrupted prior
     # install. Nothing to weigh, and leaving it would block the skill link and
@@ -430,7 +435,9 @@ fi
 LEGACY_SETUP="$SKILL_DEST/setup"
 if [ -d "$LEGACY_SETUP" ] && [ ! -L "$LEGACY_SETUP" ] && [ -f "$LEGACY_SETUP/SKILL.md" ] \
    && [ "$(skill_name_of "$LEGACY_SETUP/SKILL.md")" = "setup" ] \
-   && grep -qi 'greenroom' "$LEGACY_SETUP/SKILL.md"; then
+   && [ -f "$LEGACY_SETUP/scripts/greenroom.py" ] && [ -d "$LEGACY_SETUP/templates" ]; then
+  # Payload signature, not a text match: a stranger's `setup` skill that merely
+  # mentions greenroom in its prose would otherwise be told to rm -rf itself.
   echo "NOTE: $LEGACY_SETUP is a copied install of greenroom under its original name."
   echo "      Remove it (rm -rf $LEGACY_SETUP) so /setup stops resolving to greenroom."
 fi
