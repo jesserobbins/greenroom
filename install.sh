@@ -135,10 +135,16 @@ link_one() {
 # directory, no SKILL.md, containing our symlinks -- and remove it.
 OLD_SHIM="$SKILL_DEST/greenroom"
 if [ -L "$OLD_SHIM" ]; then
-  # An even older installer symlinked this path straight at the repo root.
+  # An even older installer symlinked this path straight at the repo root. It is
+  # ours whether it points at THIS clone or another one -- a repo root holds no
+  # SKILL.md, so looks_like_ours cannot see it; the plugin manifest is the tell.
   if points_at_repo_root "$OLD_SHIM"; then
     rm "$OLD_SHIM"
     echo "migrated: removed the old greenroom root symlink at $OLD_SHIM"
+  elif root_dest="$(resolve_link "$OLD_SHIM")" && [ -f "$root_dest/.claude-plugin/plugin.json" ] \
+       && grep -q '"name"[[:space:]]*:[[:space:]]*"greenroom"' "$root_dest/.claude-plugin/plugin.json"; then
+    rm "$OLD_SHIM"
+    echo "migrated: removed an old greenroom root symlink into another checkout at $root_dest"
   fi
 elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   # Decide BEFORE mutating. Removing our links first and only then discovering
@@ -156,10 +162,8 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   SHIM_NOISE=".DS_Store Thumbs.db .localized"
   shim_is_ours=""
   shim_has_extras=""
-  shim_entries=0
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
-    shim_entries=$((shim_entries + 1))
     ename="$(basename "$entry")"
     is_noise=""
     for n in $SHIM_NOISE; do
@@ -179,13 +183,13 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       *) shim_has_extras=yes ;;
     esac
   done
-  if [ "$shim_entries" -eq 0 ] || { [ -z "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; }; then
+  if [ -z "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
     # Empty, or nothing but OS noise -- a partially cleaned or interrupted prior
     # install. Nothing to weigh, and leaving it would block the skill link and
     # fail the run over a file the user cannot see.
     for n in $SHIM_NOISE; do rm -f "$OLD_SHIM/$n"; done
     rmdir "$OLD_SHIM"
-    echo "migrated: removed an empty $OLD_SHIM"
+    echo "migrated: removed an empty or noise-only $OLD_SHIM"
   elif [ -n "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
     rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates"
     for n in $SHIM_NOISE; do rm -f "$OLD_SHIM/$n"; done
@@ -239,7 +243,12 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   skill_found=$((skill_found + 1))
   sname="$(basename "$skill_dir")"
   link_result=""
-  link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname" claim-dangling
+  # Only names distinctive enough to be ours opt into claiming a dangling link.
+  # `skills/*/` is one directory today, but a future skill called `notes` or
+  # `sync` must not silently take over a user's dangling symlink at that name.
+  claim=""
+  case "$sname" in greenroom|greenroom-*) claim=claim-dangling ;; esac
+  link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname" "$claim"
   if [ "$link_result" = "linked" ]; then skill_linked=$((skill_linked + 1)); fi
 done
 

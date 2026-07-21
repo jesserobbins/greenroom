@@ -84,7 +84,9 @@ reaches a stable release.
 - `install.sh` is tracked executable. The README's manual-install block says
   `./install.sh`, which failed with "permission denied"; every test invoked it as
   `bash install.sh`, so nothing caught it.
-- Re-installing from a second clone repoints the links instead of hard-failing.
+- Re-installing from a second clone repoints the links instead of hard-failing —
+  including the ancient root symlink, which holds no `SKILL.md` to identify it
+  and is now recognized by the plugin manifest at its target.
   Ownership was proven only against the current `$REPO_DIR`, so a link from an
   older clone that still existed on disk was neither ours nor dangling: the run
   skipped it and exited non-zero. A link into any directory that declares itself
