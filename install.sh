@@ -252,6 +252,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   shim_dangling=""
   shim_dangle_n=0
   shim_dangle_parents=()
+  shim_ours_parents=()
   shim_rmdir_failed=""
   shim_undeletable=""
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
@@ -273,6 +274,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       scripts|templates)
         if points_at_repo "$entry"; then
           shim_is_ours=yes
+          shim_ours_parents+=("$(normalize_target_dir "$entry")")
         elif [ -L "$entry" ] && [ ! -e "$entry" ] \
              && [ "$(basename "$(readlink "$entry")")" = "$ename" ]; then
           # Dangling, and shaped like ours. Deliberately NOT enough on its own:
@@ -284,6 +286,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
           shim_dangling="$shim_dangling $ename -> $(readlink "$entry")"
         elif edest="$(resolve_link "$entry")" && is_greenroom_checkout "$(dirname "$edest")"; then
           shim_is_ours=yes                               # a link into ANOTHER live checkout
+          shim_ours_parents+=("$(normalize_target_dir "$entry")")
         else
           shim_has_extras=yes                            # a real dir or a foreign link
         fi
@@ -291,17 +294,36 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       *) shim_has_extras=yes ;;
     esac
   done
-  # The old installer always made BOTH links, side by side, pointing into the same
-  # clone. That pair is the signature; a lone dangling `scripts` is not, however it
-  # is named. Only a matched pair sharing one parent is claimed on inference.
-  # Compared as array elements, not a split string: a clone under "~/My Projects"
-  # would otherwise look like four parents instead of two and be refused.
-  if [ "$shim_dangle_n" -eq 2 ] \
-     && [ "${shim_dangle_parents[0]}" = "${shim_dangle_parents[1]}" ]; then
-    shim_is_ours=yes
-  elif [ "$shim_dangle_n" -gt 0 ] && [ -z "$shim_is_ours" ]; then
-    shim_has_extras=yes                                  # unpaired: not ours to judge
-    shim_dangling=""
+  # A dangling link is claimed on inference, never on proof, so the inference has to
+  # be narrow. Two ways to earn it, and they must ALL agree on one parent directory:
+  #   - the pair signature: both links dangling into the same clone, which is
+  #     exactly what the old installer wrote; or
+  #   - a sibling already PROVEN ours pointing into that same clone.
+  # Anything else -- a lone dangling `scripts`, or a `-> /Volumes/ext/templates`
+  # beside a link that is genuinely ours -- is the user's, and is left alone.
+  # Parents compare as array elements, not a split string: a clone under
+  # "~/My Projects" would otherwise look like several parents and be refused.
+  if [ "$shim_dangle_n" -gt 0 ]; then
+    shim_dangle_ok=""
+    shim_dangle_home="${shim_dangle_parents[0]}"
+    for p in "${shim_dangle_parents[@]}"; do
+      if [ "$p" != "$shim_dangle_home" ]; then shim_dangle_home=""; break; fi
+    done
+    if [ -n "$shim_dangle_home" ]; then
+      if [ "$shim_dangle_n" -eq 2 ]; then
+        shim_dangle_ok=yes                               # the pair signature
+      else
+        for p in ${shim_ours_parents[@]+"${shim_ours_parents[@]}"}; do
+          if [ "$p" = "$shim_dangle_home" ]; then shim_dangle_ok=yes; break; fi
+        done
+      fi
+    fi
+    if [ -n "$shim_dangle_ok" ]; then
+      shim_is_ours=yes
+    else
+      shim_has_extras=yes
+      shim_dangling=""
+    fi
   fi
   # One link proven ours and its sibling merely dangling is still ours -- that is a
   # plain in-place upgrade where git could not remove one of the old directories
@@ -424,8 +446,11 @@ if [ -n "$install_failed" ]; then
     # The same remedy link_one gives. A later successful run does NOT repair this:
     # the command loop does not claim dangling links (these are generic names), so
     # it would skip this one too. Saying "until this run succeeds" was false.
-    echo "     WARNING: $stale_cmd is registered but broken (target gone)."
-    echo "              /$(basename "$cmd" .md) stays broken until: rm $stale_cmd && re-run install.sh"
+    # Ownership is unprovable here -- the target is gone -- and these are generic
+    # names a user may own, so this states the fact and leaves the conclusion to
+    # them rather than telling them to delete something that might be theirs.
+    echo "     NOTE: $stale_cmd is a symlink whose target no longer exists."
+    echo "           If it is greenroom's, rm it and re-run to reinstall /$(basename "$cmd" .md)."
   done
 else
   for cmd in "$REPO_DIR"/commands/*.md; do
