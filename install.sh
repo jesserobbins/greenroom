@@ -46,7 +46,8 @@ normalize_target_dir() {
   case "$raw" in /*) ;; *) raw="$(dirname "$1")/$raw" ;; esac
   dir="$(dirname "$raw")"
   out=""
-  local IFS=/
+  local IFS=/ globstate="$-"
+  set -f                                 # splitting on / must not glob a component
   for part in $dir; do
     case "$part" in
       ""|.) ;;
@@ -54,6 +55,7 @@ normalize_target_dir() {
       *) out="$out/$part" ;;
     esac
   done
+  case "$globstate" in *f*) ;; *) set +f ;; esac
   printf '%s\n' "${out:-/}"
 }
 
@@ -320,7 +322,8 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   if [ -d "$SKILL_DEST/$sname" ] && [ ! -L "$SKILL_DEST/$sname" ] \
      && [ -f "$SKILL_DEST/$sname/SKILL.md" ] \
      && [ "$(skill_name_of "$SKILL_DEST/$sname/SKILL.md")" = "$sname" ] \
-     && [ -f "$SKILL_DEST/$sname/scripts/greenroom.py" ]; then
+     && [ -f "$SKILL_DEST/$sname/scripts/greenroom.py" ] \
+     && [ -d "$SKILL_DEST/$sname/templates" ]; then
     echo "NOTE: $SKILL_DEST/$sname is already a standalone install of the $sname skill."
     echo "      Leaving it alone. Remove it first if you want this clone symlinked instead."
     skill_ok=$((skill_ok + 1))
@@ -356,12 +359,10 @@ if [ -n "$install_failed" ]; then
     [ -f "$cmd" ] || continue
     stale_cmd="$CMD_DEST/$(basename "$cmd")"
     [ -L "$stale_cmd" ] || continue
-    if points_at_repo "$stale_cmd" && [ -e "$stale_cmd" ]; then
-      continue                                     # ours and still working
-    fi
-    if cdest="$(resolve_link "$stale_cmd")" && looks_like_ours "$cdest" "$stale_cmd"; then
-      continue                                     # another checkout's, still working
-    fi
+    # Only a link that actually DANGLES is broken. A working link here is none of
+    # our business whoever owns it -- warning about it would tell the user /new is
+    # about to fail when it works perfectly well.
+    if [ -e "$stale_cmd" ]; then continue; fi
     echo "     WARNING: $stale_cmd is registered but broken (target gone)."
     echo "              /$(basename "$cmd" .md) will fail until this run succeeds."
   done
