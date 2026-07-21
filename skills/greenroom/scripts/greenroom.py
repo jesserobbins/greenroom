@@ -447,7 +447,8 @@ def _readme_block(project_name: str, repos: list[str], canonical: Optional[str])
             "the session every child repo with no extra wiring. If a "
             f"`{project_name}.code-workspace` exists, VS Code-family users can open it or run the "
             f"`Claude Code ({canonical})` task. After adding a new "
-            "repo under this wrapper, run `/greenroom:sync` (or `scripts/greenroom.py sync`) to wire it in.",
+            "repo under this wrapper, run `/greenroom:sync` (or the `greenroom` skill's `sync` subcommand) "
+            "to wire it in.",
             "",
         ]
     lines += ["| Repo | Role |", "|---|---|"]

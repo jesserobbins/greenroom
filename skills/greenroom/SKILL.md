@@ -64,8 +64,10 @@ while [ -n "$d" ] && [ "$d" != "/" ] && [ "$d" != "$HOME" ]; do
   d="$(dirname "$d")"
 done
 # newest cached plugin version, keyed on the VERSION dir, not the whole path
+# `|| true`: with no cache dir `ls` exits non-zero, which would abort the whole
+# pasted block under `set -e -o pipefail` before the guard below can explain why.
 cache="$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom 2>/dev/null \
-         | awk -F/ '{print $(NF-2)"\t"$0}' | sort -V | tail -1 | cut -f2-)"
+         | awk -F/ '{print $(NF-2)"\t"$0}' | sort -V | tail -1 | cut -f2- || true)"
 greenroom=""
 for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" "$proj" "$cache" \
          "$HOME/.claude/skills/greenroom"; do
