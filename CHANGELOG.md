@@ -56,9 +56,12 @@ reaches a stable release.
   declined to touch was silently repointed one step later. Refreshing is now
   ownership-checked like migration, and both checks resolve relative symlink
   targets instead of only absolute ones.
-- The old script-root shim is dismantled by removing the two links we created,
-  not by `rm -rf` on the whole directory. Anything else the user left in there
-  survives, and the migration says so instead of deleting silently. It is also
+- The old script-root shim is dismantled only when every entry in it is one of
+  the two links we created — the decision is made before anything is removed, so
+  a `SKIP migration: ... leaving it untouched` is now true. It previously tore
+  out our links and *then* discovered `rmdir` could not empty the directory,
+  leaving the user's old script fallback broken with no skill linked over it. It
+  is also
   recognized when those links merely dangle, which is what they do in the common
   upgrade: old clone deleted, greenroom re-cloned elsewhere, `install.sh` re-run.
 - A dangling symlink at the *skill* path is replaced rather than skipped, and a
@@ -77,6 +80,10 @@ reaches a stable release.
   older clone that still existed on disk was neither ours nor dangling: the run
   skipped it and exited non-zero. A link into any directory that declares itself
   a greenroom payload is now recognized and repointed.
+- The hollow slash commands are no longer registered when the skill they invoke
+  did not install. They only say "invoke the greenroom skill", so linking them
+  anyway just moved the failure from install time — where the remedy is printed
+  — to use time.
 - An install that installs no skill now exits non-zero and prints the remedy,
   instead of reporting `Done. 0 skill(s)` and leaving the user's `/greenroom`
   quietly pointing at an older clone.

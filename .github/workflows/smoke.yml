@@ -4,11 +4,17 @@ name: smoke
 # self-sufficiency, the context budget, the hollow commands, the SKILL.md path
 # resolver, and install.sh's ownership-checked migrations. Left to local runs,
 # every one of those guarantees depends on a developer remembering.
+# Push is narrowed to main so a same-repo PR branch is covered once, by the
+# pull_request event, rather than running the whole matrix twice.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+# The job only reads the checkout; do not inherit the repo default token scope.
+permissions:
+  contents: read
 
 jobs:
   smoke:

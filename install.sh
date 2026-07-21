@@ -139,30 +139,39 @@ if [ -L "$OLD_SHIM" ]; then
     echo "migrated: removed the old greenroom root symlink at $OLD_SHIM"
   fi
 elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
-  # The shim is also ours when its links merely DANGLE: delete the old clone,
-  # re-clone elsewhere, re-run, and points_at_repo cannot prove a thing. Without
-  # this the migration calls the user's own shim foreign, link_one then refuses
-  # the real directory, and the install exits 1 having done nothing.
+  # Decide BEFORE mutating. Removing our links first and only then discovering
+  # rmdir cannot empty the directory leaves the user worse off than the no-op we
+  # claim to have performed: their old script fallback is gone, the skill was
+  # never linked over the surviving directory, and the run exits 1.
+  #
+  # A shim entry is ours if it is a symlink named scripts/templates that either
+  # resolves into this repo or dangles -- dangling is what they do in the common
+  # upgrade, where the old clone was deleted and greenroom re-cloned elsewhere.
   shim_is_ours=""
-  for owned in scripts templates; do
-    if points_at_repo "$OLD_SHIM/$owned"; then shim_is_ours=yes; fi
-    if [ -L "$OLD_SHIM/$owned" ] && [ ! -e "$OLD_SHIM/$owned" ]; then shim_is_ours=yes; fi
+  shim_has_extras=""
+  for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
+    case "$(basename "$entry")" in
+      scripts|templates)
+        if points_at_repo "$entry"; then
+          shim_is_ours=yes
+        elif [ -L "$entry" ] && [ ! -e "$entry" ]; then
+          shim_is_ours=yes
+        else
+          shim_has_extras=yes                            # a real dir or a foreign link
+        fi
+        ;;
+      *) shim_has_extras=yes ;;
+    esac
   done
-  if [ -n "$shim_is_ours" ]; then
-    # Remove only the two links we created, then rmdir. If the user dropped
-    # anything else in here, the rmdir fails and their files survive -- better a
-    # loud SKIP than a silent `rm -rf` of a directory we only partly own.
-    for owned in scripts templates; do
-      if points_at_repo "$OLD_SHIM/$owned"; then rm -f "$OLD_SHIM/$owned"; fi
-      if [ -L "$OLD_SHIM/$owned" ] && [ ! -e "$OLD_SHIM/$owned" ]; then rm -f "$OLD_SHIM/$owned"; fi
-    done
-    if rmdir "$OLD_SHIM" 2>/dev/null; then
-      echo "migrated: removed the old script-root shim at $OLD_SHIM"
-    else
-      echo "SKIP migration: $OLD_SHIM still holds files we did not create (leaving it untouched)"
-      echo "     the skill cannot be linked over a real directory -- move what you want to keep"
-      echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
-    fi
+  if [ -n "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
+    rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates"
+    rmdir "$OLD_SHIM"
+    echo "migrated: removed the old script-root shim at $OLD_SHIM"
+  elif [ -n "$shim_is_ours" ]; then
+    echo "SKIP migration: $OLD_SHIM holds files we did not create (leaving it untouched)"
+    echo "     the skill cannot be linked over a real directory -- move what you want to keep"
+    echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
   else
     echo "SKIP migration: $OLD_SHIM is a directory we do not recognize (leaving it untouched)"
   fi
@@ -204,14 +213,21 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   if [ "$link_result" = "linked" ]; then skill_linked=$((skill_linked + 1)); fi
 done
 
+# The commands are hollow -- each one just says "invoke the greenroom skill". If
+# the skill did not install, registering them hands the user a /new, /add, /sync
+# that fail at use time instead of failing here, where the remedy is printed.
 cmd_linked=0
-for cmd in "$REPO_DIR"/commands/*.md; do
-  [ -f "$cmd" ] || continue                        # no commands dir / no matches
-  cname="$(basename "$cmd")"
-  link_result=""
-  link_one "$cmd" "$CMD_DEST/$cname" "command $cname"
-  if [ "$link_result" = "linked" ]; then cmd_linked=$((cmd_linked + 1)); fi
-done
+if [ "$skill_linked" -lt "$skill_found" ]; then
+  echo "not linking the commands: they only invoke the skill, which did not install"
+else
+  for cmd in "$REPO_DIR"/commands/*.md; do
+    [ -f "$cmd" ] || continue                      # no commands dir / no matches
+    cname="$(basename "$cmd")"
+    link_result=""
+    link_one "$cmd" "$CMD_DEST/$cname" "command $cname"
+    if [ "$link_result" = "linked" ]; then cmd_linked=$((cmd_linked + 1)); fi
+  done
+fi
 
 echo "Done. $skill_linked skill(s) → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
 

@@ -930,6 +930,11 @@ out4="$(HOME="$ug" bash "$REPO_ROOT/install.sh" 2>&1)" && rc=0 || rc=$?
 echo "$out4" | grep -q "installed 0 of 1 skill" || fail "install.sh did not say it installed nothing: $out4"
 echo "$out4" | grep -q "re-run install.sh" || fail "install.sh skipped without telling the user how to recover: $out4"
 [ ! -e "$ug/somewhere-else/SKILL.md" ] || fail "install.sh wrote THROUGH the unrelated symlink into the user's dir"
+# The commands are hollow -- they only invoke the skill. Registering /new, /add,
+# /sync against a skill that did not install just moves the failure to use time.
+[ ! -e "$ug/.claude/commands/new.md" ] \
+  || fail "install.sh registered the hollow commands while the skill they invoke was skipped"
+echo "$out4" | grep -q "not linking the commands" || fail "install.sh skipped the commands silently: $out4"
 [ -L "$ug/.claude/skills/greenroom" ] || fail "install.sh removed an unrelated user symlink at the skill path"
 [ "$(readlink "$ug/.claude/skills/greenroom")" = "$ug/somewhere-else" ] \
   || fail "install.sh repointed an unrelated user symlink at the skill path"
@@ -957,7 +962,11 @@ ln -s "$REPO_ROOT/skills/greenroom/scripts" "$kh/.claude/skills/greenroom/script
 echo "mine" > "$kh/.claude/skills/greenroom/notes.md"
 out5="$(HOME="$kh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc5=0 || rc5=$?
 [ -f "$kh/.claude/skills/greenroom/notes.md" ] || fail "shim migration destroyed a user file it did not create"
-[ ! -e "$kh/.claude/skills/greenroom/scripts" ] || fail "shim migration left our own stale scripts link behind"
+# Decide before mutating: a SKIP that says "leaving it untouched" must be true.
+# Tearing out the links first and only then finding rmdir fails leaves the user
+# with a broken script fallback AND no skill linked over the surviving directory.
+[ -L "$kh/.claude/skills/greenroom/scripts" ] \
+  || fail "shim migration removed our links, then aborted claiming it touched nothing"
 echo "$out5" | grep -q "SKIP migration" || fail "shim migration removed nothing but stayed silent: $out5"
 # The surviving directory then blocks the skill link, so this run installs nothing.
 [ "$rc5" -ne 0 ] || fail "install.sh reported success after the surviving shim dir blocked the skill: $out5"
@@ -1105,6 +1114,21 @@ got="$( cd "$proj/sub/deeper" && HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash 
   || fail "the SKILL.md resolver failed from a subdirectory of a project-local install"
 [ "$got" = "$proj/.claude/skills/greenroom/scripts/greenroom.py" ] \
   || fail "resolver did not walk up to the project-local install from a subdirectory (picked $got)"
+# shape 0: $CLAUDE_PLUGIN_ROOT set, as the plugin runtime does. Every other shape
+#          clears it, so without this the first tier -- and the `skills/greenroom`
+#          sub-path it appends -- would ship unvalidated. It must outrank a
+#          project-local copy and a cached one.
+pr="$T/pluginroot"
+mkdir -p "$pr/root/skills" "$pr/home/src/myproj/.claude/skills" \
+         "$pr/home/.claude/plugins/cache/jesserobbins/greenroom/9.9.9/skills"
+cp -R "$REPO_ROOT/skills/greenroom" "$pr/root/skills/greenroom"
+cp -R "$REPO_ROOT/skills/greenroom" "$pr/home/src/myproj/.claude/skills/greenroom"
+cp -R "$REPO_ROOT/skills/greenroom" "$pr/home/.claude/plugins/cache/jesserobbins/greenroom/9.9.9/skills/greenroom"
+got="$( cd "$pr/home/src/myproj" && HOME="$pr/home" CLAUDE_PLUGIN_ROOT="$pr/root" bash "$resolver" )" \
+  || fail "the SKILL.md resolver failed with CLAUDE_PLUGIN_ROOT set"
+[ "$got" = "$pr/root/skills/greenroom/scripts/greenroom.py" ] \
+  || fail "resolver did not honour CLAUDE_PLUGIN_ROOT (picked $got)"
+
 # shape 1b: a project-local install AND a global one, with the project under $HOME
 #           as real projects are. The project must win -- and the walk-up must not
 #           mistake $HOME's own .claude/skills for the project tier.
