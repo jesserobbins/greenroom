@@ -31,7 +31,8 @@ resolve_link() {
   case "$raw" in /*) ;; *) raw="$(dirname "$1")/$raw" ;; esac
   dir="$(dirname "$raw")"
   [ -d "$dir" ] || return 1
-  printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$(basename "$raw")"
+  dir="$(cd "$dir" && pwd -P)"
+  printf '%s/%s\n' "${dir%/}" "$(basename "$raw")"   # %/ so a target under / is not //name
 }
 
 # points_at_repo <path>: true if <path> is a symlink resolving into this repo.
@@ -148,16 +149,24 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   # A shim entry is ours if it is a symlink named scripts/templates that either
   # resolves into this repo or dangles -- dangling is what they do in the common
   # upgrade, where the old clone was deleted and greenroom re-cloned elsewhere.
+  #
+  # OS noise is not the user's -- a Finder-created .DS_Store is invisible to `ls`,
+  # and counting it as a file someone left behind would fail the whole install
+  # over something nobody put there. Named once, and driven from that one list.
+  SHIM_NOISE=".DS_Store Thumbs.db .localized"
   shim_is_ours=""
   shim_has_extras=""
   shim_entries=0
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
     shim_entries=$((shim_entries + 1))
-    case "$(basename "$entry")" in
-      # OS noise, not the user's. A Finder-created .DS_Store is invisible to `ls`
-      # and would otherwise fail the whole install over a file nobody put there.
-      .DS_Store|Thumbs.db|.localized) ;;
+    ename="$(basename "$entry")"
+    is_noise=""
+    for n in $SHIM_NOISE; do
+      if [ "$ename" = "$n" ]; then is_noise=yes; fi
+    done
+    if [ -n "$is_noise" ]; then continue; fi
+    case "$ename" in
       scripts|templates)
         if points_at_repo "$entry"; then
           shim_is_ours=yes
@@ -170,14 +179,16 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       *) shim_has_extras=yes ;;
     esac
   done
-  if [ "$shim_entries" -eq 0 ]; then
-    # An empty dir -- a partially cleaned or interrupted prior install. Nothing to
-    # weigh, and leaving it would block the skill link and fail the run.
+  if [ "$shim_entries" -eq 0 ] || { [ -z "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; }; then
+    # Empty, or nothing but OS noise -- a partially cleaned or interrupted prior
+    # install. Nothing to weigh, and leaving it would block the skill link and
+    # fail the run over a file the user cannot see.
+    for n in $SHIM_NOISE; do rm -f "$OLD_SHIM/$n"; done
     rmdir "$OLD_SHIM"
     echo "migrated: removed an empty $OLD_SHIM"
   elif [ -n "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
-    rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates" \
-          "$OLD_SHIM/.DS_Store" "$OLD_SHIM/Thumbs.db" "$OLD_SHIM/.localized"
+    rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates"
+    for n in $SHIM_NOISE; do rm -f "$OLD_SHIM/$n"; done
     rmdir "$OLD_SHIM"
     echo "migrated: removed the old script-root shim at $OLD_SHIM"
   elif [ -n "$shim_is_ours" ]; then
@@ -208,6 +219,13 @@ elif stale_dest="$(resolve_link "$STALE")" && looks_like_ours "$stale_dest" "$ST
 elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
   rm "$STALE"
   echo "migrated: removed a dangling greenroom-setup link (its target no longer exists)"
+elif [ -d "$STALE" ] && [ ! -L "$STALE" ] && [ -f "$STALE/SKILL.md" ] \
+     && grep -q "^name:[[:space:]]*greenroom-setup[[:space:]]*\$" "$STALE/SKILL.md"; then
+  # A COPIED payload, from `npx skills add ...@greenroom-setup`. Not a link we
+  # made, so not ours to delete -- but left alone the retired name resolves
+  # forever, which is the whole point of this migration.
+  echo "NOTE: $STALE is a copied install of the retired greenroom-setup skill."
+  echo "      Remove it (rm -rf $STALE) so the old name stops resolving."
 fi
 
 # Link each skill under its own name. Skill names carry the greenroom identity

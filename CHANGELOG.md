@@ -62,9 +62,9 @@ reaches a stable release.
   out our links and *then* discovered `rmdir` could not empty the directory,
   leaving the user's old script fallback broken with no skill linked over it. OS
   noise (`.DS_Store`, `Thumbs.db`, `.localized`) does not count as a file the
-  user left, and an empty directory is simply removed rather than called foreign
-  — either one previously failed the whole install over something invisible. It
-  is also
+  user left, and a directory that is empty or holds nothing but that noise is
+  simply removed rather than called foreign — either one previously failed the
+  whole install over something invisible. It is also
   recognized when those links merely dangle, which is what they do in the common
   upgrade: old clone deleted, greenroom re-cloned elsewhere, `install.sh` re-run.
 - A dangling symlink at the *skill* path is replaced rather than skipped, and a
@@ -75,6 +75,12 @@ reaches a stable release.
   command names (`new.md`, `add.md`, `sync.md`) are generic enough that a user
   may have bound them to their own repo, so a dangling link there — an unmounted
   volume, a moved clone — is left alone and reported.
+- A *copied* `greenroom-setup` install (from `npx skills add ...@greenroom-setup`)
+  is reported with the command to remove it. It is not a link `install.sh` made,
+  so it is not ours to delete, but left unmentioned the retired skill name keeps
+  resolving forever.
+- Symlink ownership no longer fails for a target sitting directly under `/`,
+  where the resolved path picked up a doubled slash and matched nothing.
 - `install.sh` is tracked executable. The README's manual-install block says
   `./install.sh`, which failed with "permission denied"; every test invoked it as
   `bash install.sh`, so nothing caught it.
