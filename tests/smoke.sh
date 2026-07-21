@@ -1482,12 +1482,31 @@ ok "the declared name comes from the frontmatter, not from a line in the body"
 #          stayed broken. The summary must say so. ---
 csh="$T/cmdskiphome"
 mkdir -p "$csh/.claude/skills" "$csh/.claude/commands"
+# Our own shape -- <clone>/commands/new.md -- after the clone moved. This is the
+# common upgrade, and it SELF-HEALS: only this installer ever wrote a link of that
+# shape, so a dead one is ours to replace. Leaving it skipped meant a green run
+# with three registered-but-broken slash commands.
 ln -s "$T/moved-clone/commands/new.md" "$csh/.claude/commands/new.md"
 out24="$(HOME="$csh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a dangling command link: $out24"
+[ "$(readlink "$csh/.claude/commands/new.md")" = "$REPO_ROOT/commands/new.md" ] \
+  || fail "a dangling command link of our own shape was not repointed at this clone"
 echo "$out24" | grep -q "skipped -- see the SKIPs above" \
-  || fail "the summary buried a skipped command behind a green Done. line: $out24"
+  && fail "our own dangling command link was reported as skipped instead of healed: $out24"
 [ -L "$csh/.claude/skills/greenroom" ] || fail "the skill itself was not installed"
-ok "skipped command links are named in the summary, not just in the SKIP lines"
+
+# ...while a link of ANY other shape is still skipped, and the summary says so
+# rather than letting a green Done. line bury it.
+csh2="$T/cmdskiphome2"
+mkdir -p "$csh2/.claude/skills" "$csh2/.claude/commands"
+# Basename matches on purpose: only the PARENT-directory half of the shape check
+# rejects this, so a fixture differing in both would not test it.
+ln -s "/Volumes/ext-that-is-not-mounted/new.md" "$csh2/.claude/commands/new.md"
+out24b="$(HOME="$csh2" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a foreign command link: $out24b"
+[ "$(readlink "$csh2/.claude/commands/new.md")" = "/Volumes/ext-that-is-not-mounted/new.md" ] \
+  || fail "install.sh claimed a dangling command link that was never our shape"
+echo "$out24b" | grep -q "skipped -- see the SKIPs above" \
+  || fail "the summary buried a skipped command behind a green Done. line: $out24b"
+ok "our own dangling command links heal; foreign ones are skipped and named in the summary"
 
 # --- 70. withholding NEW command links when the skill did not install is only half
 #          the invariant: a previous successful run may have left ours registered,
@@ -1649,11 +1668,13 @@ ok "a dangling link at the skill path is replaced, with a distinct message"
 #          mode deserves the same answer at all three sites. ---
 uvh="$T/unmountedskillhome"
 mkdir -p "$uvh/.claude/skills"
-ln -s "/Volumes/ext-that-is-not-mounted/my-skill" "$uvh/.claude/skills/greenroom"
+# Basename matches the link name, so only the parent-directory half of the shape
+# check rejects it -- we only ever wrote <clone>/skills/greenroom.
+ln -s "/Volumes/ext-that-is-not-mounted/greenroom" "$uvh/.claude/skills/greenroom"
 out37="$(HOME="$uvh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc37=0 || rc37=$?
 [ -L "$uvh/.claude/skills/greenroom" ] \
   || fail "install.sh claimed a dangling link whose target was never shaped like ours"
-[ "$(readlink "$uvh/.claude/skills/greenroom")" = "/Volumes/ext-that-is-not-mounted/my-skill" ] \
+[ "$(readlink "$uvh/.claude/skills/greenroom")" = "/Volumes/ext-that-is-not-mounted/greenroom" ] \
   || fail "install.sh repointed a user's link to an unmounted volume"
 [ "$rc37" -ne 0 ] || fail "install.sh reported success while blocked: $out37"
 ok "a dangling link to an unmounted volume survives at the skill path too"

@@ -40,8 +40,8 @@ reaches a stable release.
   there is unreachable for standalone users.
 - SKILL.md is a router: detail moved into `skills/greenroom/references/`, which
   costs nothing until read, and flag documentation defers to `--help`. The
-  always-resident file drops from 3,299 words (22,850 bytes) to 1,363 (8,620) —
-  about 59% — with no functionality removed; the detail now sits in `references/`
+  always-resident file drops from ~3,300 words (~22.8 KB) to ~1,400 (~8.8 KB) —
+  roughly 60% — with no functionality removed; the detail now sits in `references/`
   and is paid for only when a task needs it. Smoke tests assert a word ceiling so
   it cannot silently regrow.
 - `install.sh` no longer builds a `~/.claude/skills/greenroom/` script-root

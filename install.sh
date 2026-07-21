@@ -195,12 +195,12 @@ is_greenroom_checkout() {
 # symlinks, never clobber anything the user owns -- neither a real file nor a
 # symlink of their own. Sets `link_result` to "linked" or "skip".
 #
-# Pass a non-empty fourth argument only for a path whose NAME is ours
-# (`skills/greenroom`), which opts into claiming a dangling link there. A dangling
-# link there is almost certainly our own after the clone moved. The command links
-# are generic names -- new.md, add.md, sync.md -- that a user may well have bound
-# to their own repo, and a target on an unmounted volume or a moved clone reads
-# as dangling too; those we leave alone.
+# The fourth argument is the directory name we link OUT of -- `skills` or
+# `commands` -- and passing it opts into claiming a dangling link at this path. A
+# dead link is claimed only when its recorded target is <something>/<that dir>/<the
+# link name>, which is the only shape this installer ever wrote. That is what makes
+# it safe at generic names like new.md: a user's `-> /Volumes/ext/my-new.md`
+# matches neither half, and nothing anyone actively uses dangles.
 link_one() {
   local target="$1" link="$2" label="$3" claim_dangling="${4:-}" dest
   if [ -L "$link" ]; then
@@ -210,13 +210,14 @@ link_one() {
       rm "$link"                                   # another greenroom checkout: repoint
       echo "repointed $label from another greenroom checkout at $dest"
     elif [ ! -e "$link" ] && [ -n "$claim_dangling" ] \
-         && [ "$(basename "$(readlink "$link")")" = "$(basename "$link")" ]; then
+         && [ "$(basename "$(readlink "$link")")" = "$(basename "$link")" ] \
+         && [ "$(basename "$(dirname "$(readlink "$link")")")" = "$claim_dangling" ]; then
       # Our own link looks exactly like this after the clone is moved or renamed,
-      # and ownership can no longer be proven. The shape has to carry it: ours
-      # pointed at <clone>/skills/<name>, so the target basename matches the link
-      # name. That keeps this consistent with the shim entries and the command
-      # links, which refuse a `-> /Volumes/...` dangle for exactly this reason --
-      # an unmounted volume must not read as abandoned.
+      # and ownership can no longer be proven. The shape has to carry it: we only
+      # ever wrote <clone>/$claim_dangling/<name>, so both the target basename and
+      # its parent directory name must match. An unmounted volume
+      # (`-> /Volumes/ext/my-new.md`) satisfies neither and must not read as
+      # abandoned -- the same rule the shim entries apply.
       rm "$link"
       echo "replaced a dangling symlink at $link (its target no longer exists)"
     elif [ ! -e "$link" ]; then
@@ -426,7 +427,7 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   # `skills/*/` is one directory today, but a future skill called `notes` or
   # `sync` must not silently take over a user's dangling symlink at that name.
   claim=""
-  case "$sname" in greenroom|greenroom-*) claim=claim-dangling ;; esac
+  case "$sname" in greenroom|greenroom-*) claim=skills ;; esac
   # A real directory here that declares this very skill is a standalone install
   # (`npx skills add -g`), not an obstacle. Left to link_one it becomes SKIP ->
   # exit 1, telling the user to remove a perfectly good install of greenroom.
@@ -493,7 +494,7 @@ else
     [ -f "$cmd" ] || continue                      # no commands dir / no matches
     cname="$(basename "$cmd")"
     link_result=""
-    link_one "$cmd" "$CMD_DEST/$cname" "command $cname"
+    link_one "$cmd" "$CMD_DEST/$cname" "command $cname" commands
     if [ "$link_result" = "linked" ]; then
       cmd_linked=$((cmd_linked + 1))
     else
