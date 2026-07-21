@@ -16,10 +16,12 @@ on:
 permissions:
   contents: read
 
-# A superseded PR push should not keep burning both matrix legs.
+# A superseded PR push should not keep burning both matrix legs. Pushes to main are
+# NOT cancelled: this suite is the only guard on the distribution shape, and two
+# merges in quick succession would otherwise leave the first commit unverified.
 concurrency:
   group: smoke-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   smoke:

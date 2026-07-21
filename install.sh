@@ -391,13 +391,14 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
     echo "     the skill cannot be linked over a real directory -- move what you want to keep"
     echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
   fi
-  # rmdir refused: something we did not classify is still in there (a noise NAME
-  # that is really a directory, say). Report it like every other failure rather
-  # than letting set -e kill the run before any remedy is printed.
+  # rmdir refused AFTER we had already cleared our own entries -- something arrived
+  # between the scan and the rmdir, or the parent is read-only, or an NFS handle is
+  # lingering. The pre-decision path above catches the knowable cases and touches
+  # nothing; this one cannot claim that, so it must not say so.
   if [ -n "$shim_rmdir_failed" ]; then
-    echo "SKIP migration: could not empty $OLD_SHIM (leaving it untouched)"
-    echo "     the skill cannot be linked over a real directory -- move what you want to keep"
-    echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
+    echo "SKIP migration: cleared greenroom's links but could not remove $OLD_SHIM"
+    echo "     the directory is still there, so the skill cannot be linked over it --"
+    echo "     move what you want to keep out of $OLD_SHIM, remove it, then re-run install.sh"
   fi
 fi
 
