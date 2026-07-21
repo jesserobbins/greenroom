@@ -39,10 +39,11 @@ reaches a stable release.
   lives in the skill. `npx skills` never reads `commands/`, so anything encoded
   there is unreachable for standalone users.
 - SKILL.md is a router: detail moved into `skills/greenroom/references/`, which
-  costs nothing until read, and flag documentation defers to `--help`. Resident
-  context for a typical session drops roughly 72% (~4,650 → ~1,300 tokens) with
-  no functionality removed. Smoke tests assert the budget so it cannot silently
-  regrow.
+  costs nothing until read, and flag documentation defers to `--help`. The
+  always-resident file drops from 3,299 words (22,850 bytes) to 1,363 (8,620) —
+  about 59% — with no functionality removed; the detail now sits in `references/`
+  and is paid for only when a task needs it. Smoke tests assert a word ceiling so
+  it cannot silently regrow.
 - `install.sh` no longer builds a `~/.claude/skills/greenroom/` script-root
   shim; the skill directory carries its own script. It migrates the old shim and
   the stale `greenroom-setup` link, both ownership-checked.

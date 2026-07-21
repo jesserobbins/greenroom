@@ -162,6 +162,20 @@ purge_shim_noise() {
   done
 }
 
+# payload_is_complete <shipped-skill-dir> <installed-dir>: true if every top-level
+# entry we ship for this skill is present in the install. Derived from the shipped
+# directory rather than naming greenroom's own scripts/ and templates/, so the day
+# a second skill lands under skills/ a user who standalone-installed THAT one is
+# not told to remove a working install.
+payload_is_complete() {
+  local entry
+  for entry in "$1"/*; do
+    [ -e "$entry" ] || continue                  # unmatched glob
+    [ -e "$2/$(basename "$entry")" ] || return 1
+  done
+  return 0
+}
+
 # is_greenroom_checkout <dir>: true if <dir> is the root of a greenroom checkout.
 is_greenroom_checkout() {
   [ -f "$1/.claude-plugin/plugin.json" ] \
@@ -186,11 +200,14 @@ link_one() {
     elif dest="$(resolve_link "$link")" && looks_like_ours "$dest" "$link"; then
       rm "$link"                                   # another greenroom checkout: repoint
       echo "repointed $label from another greenroom checkout at $dest"
-    elif [ ! -e "$link" ] && [ -n "$claim_dangling" ]; then
+    elif [ ! -e "$link" ] && [ -n "$claim_dangling" ] \
+         && [ "$(basename "$(readlink "$link")")" = "$(basename "$link")" ]; then
       # Our own link looks exactly like this after the clone is moved or renamed,
-      # and ownership can no longer be proven -- but nobody is served by a dead
-      # link at a path named for us, and a link the user actively uses is not
-      # dangling. Replace it, and say that is what happened.
+      # and ownership can no longer be proven. The shape has to carry it: ours
+      # pointed at <clone>/skills/<name>, so the target basename matches the link
+      # name. That keeps this consistent with the shim entries and the command
+      # links, which refuse a `-> /Volumes/...` dangle for exactly this reason --
+      # an unmounted volume must not read as abandoned.
       rm "$link"
       echo "replaced a dangling symlink at $link (its target no longer exists)"
     elif [ ! -e "$link" ]; then
@@ -402,8 +419,7 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   if [ -d "$SKILL_DEST/$sname" ] && [ ! -L "$SKILL_DEST/$sname" ] \
      && [ -f "$SKILL_DEST/$sname/SKILL.md" ] \
      && [ "$(skill_name_of "$SKILL_DEST/$sname/SKILL.md")" = "$sname" ] \
-     && [ -f "$SKILL_DEST/$sname/scripts/greenroom.py" ] \
-     && [ -d "$SKILL_DEST/$sname/templates" ]; then
+     && payload_is_complete "${skill_dir%/}" "$SKILL_DEST/$sname"; then
     echo "NOTE: $SKILL_DEST/$sname is already a standalone install of the $sname skill."
     echo "      Leaving it alone. Remove it first if you want this clone symlinked instead."
     skill_ok=$((skill_ok + 1))
