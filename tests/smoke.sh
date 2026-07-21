@@ -1206,7 +1206,11 @@ echo "$out35" | grep -q "re-run install.sh" || fail "the failed-rmdir SKIP gave 
 echo "$out35" | grep -q "^Incomplete\." \
   || fail "install.sh aborted before printing its summary (set -e killed the run): $out35"
 [ -d "$ndh/.claude/skills/greenroom/.DS_Store" ] || fail "install.sh removed the directory it could not classify"
-ok "a noise name that is really a directory is reported, not a silent abort"
+# "leaving it untouched" must be true: the decision is made before mutating, so the
+# user's old script fallback still works until they clear the directory themselves.
+[ -L "$ndh/.claude/skills/greenroom/scripts" ] \
+  || fail "install.sh removed our links and only then found it could not finish"
+ok "a noise name that is really a directory is reported before anything is touched"
 
 # --- 54. an EMPTY ~/.claude/skills/greenroom (a partially cleaned or interrupted
 #          prior install) is unambiguously safe to rmdir, and leaving it blocked
@@ -1261,16 +1265,24 @@ ok "a greenroom-setup link repointed at the renamed skill is migrated away too"
 #          /setup forever. Report-only -- and `setup` is the generic name the whole
 #          rename was about, so ownership must be proven, not assumed. ---
 lgh="$T/legacycopyhome"
-mkdir -p "$lgh/.claude/skills/setup/scripts" "$lgh/.claude/skills/setup/templates" \
-         "$lgh/.claude/skills/notes/scripts" "$lgh/.claude/skills/notes/templates"
-printf -- '---\nname: setup\ndescription: Set up the greenroom layout, a public repo beside a private one.\n---\n' \
-  > "$lgh/.claude/skills/setup/SKILL.md"
-: > "$lgh/.claude/skills/setup/scripts/greenroom.py"                 # the payload signature
-# A stranger's `setup` skill that merely MENTIONS greenroom, with the same complete
-# payload shape but no greenroom.py. A text match would tell them to rm -rf it.
+mkdir -p "$lgh/.claude/skills/setup" "$lgh/.claude/skills/notes"
+# The REAL retired payload, straight from the tag. skills/setup/ shipped SKILL.md
+# and nothing else -- scripts/ and templates/ only moved inside the skill dir this
+# release -- so a hand-made payload here would test a layout that never existed and
+# let an unsatisfiable condition ship. Fall back to the genuine description line
+# when tags are absent (a shallow CI checkout), which is what the check keys on.
+if git -C "$REPO_ROOT" show 'v0.1.7-alpha:skills/setup/SKILL.md' > "$lgh/.claude/skills/setup/SKILL.md" 2>/dev/null; then
+  :
+else
+  printf -- '---\nname: setup\ndescription: Set up the greenroom layout: a top-level directory holding the public code repo beside a private notes repo.\n---\n' \
+    > "$lgh/.claude/skills/setup/SKILL.md"
+fi
+[ -s "$lgh/.claude/skills/setup/SKILL.md" ] || fail "could not build the legacy setup fixture"
+[ ! -e "$lgh/.claude/skills/setup/scripts" ] || fail "test bug: the retired payload never shipped scripts/"
+# A stranger's `setup` skill that merely MENTIONS greenroom. A loose text match
+# would tell them to rm -rf their own skill.
 printf -- '---\nname: setup\ndescription: my own setup skill; pairs well with greenroom.\n---\n' \
   > "$lgh/.claude/skills/notes/SKILL.md"
-: > "$lgh/.claude/skills/notes/scripts/something-else.py"
 out21="$(HOME="$lgh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a legacy setup copy: $out21"
 [ -f "$lgh/.claude/skills/setup/SKILL.md" ] || fail "install.sh deleted a copied payload it did not create"
 echo "$out21" | grep -q "original name" || fail "install.sh left /setup resolving to greenroom in silence: $out21"
@@ -1279,10 +1291,9 @@ echo "$out21" | grep -q "$lgh/.claude/skills/notes" && fail "install.sh claimed 
 # The stranger's own `setup` skill mentions greenroom but carries no greenroom.py.
 # A text match would tell them to rm -rf it; only the payload signature must count.
 mnh="$T/mentiononlyhome"
-mkdir -p "$mnh/.claude/skills/setup/scripts" "$mnh/.claude/skills/setup/templates"
+mkdir -p "$mnh/.claude/skills/setup"
 printf -- '---\nname: setup\ndescription: my own setup skill; pairs well with greenroom.\n---\n' \
   > "$mnh/.claude/skills/setup/SKILL.md"
-: > "$mnh/.claude/skills/setup/scripts/my-own.py"
 out33="$(HOME="$mnh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a stranger's setup skill: $out33"
 echo "$out33" | grep -q "$mnh/.claude/skills/setup" \
   && fail "install.sh told a stranger to rm -rf their own setup skill for mentioning greenroom: $out33"

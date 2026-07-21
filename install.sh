@@ -253,6 +253,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   shim_dangle_n=0
   shim_dangle_parents=()
   shim_rmdir_failed=""
+  shim_undeletable=""
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
     ename="$(basename "$entry")"
@@ -260,7 +261,14 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
     for n in $SHIM_NOISE; do
       if [ "$ename" = "$n" ]; then is_noise=yes; fi
     done
-    if [ -n "$is_noise" ]; then continue; fi
+    if [ -n "$is_noise" ]; then
+      # A noise NAME that is really a directory cannot be purged, so rmdir will
+      # refuse. Learn that HERE, while we can still decide without having touched
+      # anything -- the branch below must not delete our links and only then
+      # discover it cannot finish.
+      if [ -d "$entry" ] && [ ! -L "$entry" ]; then shim_undeletable=yes; fi
+      continue
+    fi
     case "$ename" in
       scripts|templates)
         if points_at_repo "$entry"; then
@@ -299,7 +307,13 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   # plain in-place upgrade where git could not remove one of the old directories
   # (an untracked .DS_Store inside is enough), so one link stayed live and the
   # other died. Calling that "files we did not create" aborted the upgrade.
-  if [ -z "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
+  if [ -n "$shim_undeletable" ]; then
+    # Decided before mutating: our links stay put, so "leaving it untouched" is
+    # true and the old script fallback keeps working until the user clears it.
+    echo "SKIP migration: could not empty $OLD_SHIM (leaving it untouched)"
+    echo "     the skill cannot be linked over a real directory -- move what you want to keep"
+    echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
+  elif [ -z "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
     # Empty, or nothing but OS noise -- a partially cleaned or interrupted prior
     # install. Nothing to weigh, and leaving it would block the skill link and
     # fail the run over a file the user cannot see.
@@ -477,9 +491,12 @@ fi
 LEGACY_SETUP="$SKILL_DEST/setup"
 if [ -d "$LEGACY_SETUP" ] && [ ! -L "$LEGACY_SETUP" ] && [ -f "$LEGACY_SETUP/SKILL.md" ] \
    && [ "$(skill_name_of "$LEGACY_SETUP/SKILL.md")" = "setup" ] \
-   && [ -f "$LEGACY_SETUP/scripts/greenroom.py" ] && [ -d "$LEGACY_SETUP/templates" ]; then
-  # Payload signature, not a text match: a stranger's `setup` skill that merely
-  # mentions greenroom in its prose would otherwise be told to rm -rf itself.
+   && grep -q '^description:.*greenroom layout' "$LEGACY_SETUP/SKILL.md"; then
+  # `skills/setup/` only ever shipped SKILL.md -- scripts/ and templates/ moved
+  # inside the skill dir in 0.2.0 -- so a payload-file signature can never match a
+  # real legacy install. The proof is the retired skill describing ITSELF: every
+  # 0.1.4-0.1.7 description opens "Set up the greenroom layout". A stranger whose
+  # prose merely mentions greenroom does not say that about itself.
   echo "NOTE: $LEGACY_SETUP is a copied install of greenroom under its original name."
   echo "      Remove it (rm -rf $LEGACY_SETUP) so /setup stops resolving to greenroom."
 fi
