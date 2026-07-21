@@ -78,7 +78,9 @@ reaches a stable release.
 - A *copied* `greenroom-setup` install (from `npx skills add ...@greenroom-setup`)
   is reported with the command to remove it. It is not a link `install.sh` made,
   so it is not ours to delete, but left unmentioned the retired skill name keeps
-  resolving forever.
+  resolving forever. The migration also covers the 0.1.4–0.1.7 link shape, where
+  `~/.claude/skills/greenroom-setup` pointed at `<checkout>/skills/setup` and the
+  skill declared `name: setup`.
 - Symlink ownership no longer fails for a target sitting directly under `/`,
   where the resolved path picked up a doubled slash and matched nothing.
 - `install.sh` is tracked executable. The README's manual-install block says
@@ -95,6 +97,8 @@ reaches a stable release.
   did not install. They only say "invoke the greenroom skill", so linking them
   anyway just moved the failure from install time — where the remedy is printed
   — to use time.
+- A checkout holding no `skills/*/SKILL.md` — a partial or corrupt clone — fails
+  loudly instead of reporting `Done. 0 skill(s)` and registering the commands.
 - An install that installs no skill now exits non-zero and prints the remedy,
   instead of reporting `Done. 0 skill(s)` and leaving the user's `/greenroom`
   quietly pointing at an older clone.

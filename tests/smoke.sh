@@ -1093,7 +1093,40 @@ HOME="$osh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh err
 [ -f "$old_ck/skills/greenroom-setup/SKILL.md" ] || fail "migration deleted the other checkout's files, not just the link"
 ok "a greenroom-setup link into another live checkout is migrated away too"
 
-# --- 48. ownership checks resolve RELATIVE symlink targets. An install whose links
+# --- 48. ...including the 0.1.4-0.1.7 shape, where ~/.claude/skills/greenroom-setup
+#          pointed at <checkout>/skills/SETUP, declaring `name: setup`. Matching the
+#          target's name against the LINK's basename misses it, so the retired name
+#          survived a re-clone in silence. ---
+lsh="$T/legacysetuphome"
+leg_ck="$T/legacysetupclone"
+mkdir -p "$leg_ck/skills/setup" "$leg_ck/.claude-plugin" "$lsh/.claude/skills"
+printf -- '---\nname: setup\ndescription: the pre-rename skill name\n---\n' \
+  > "$leg_ck/skills/setup/SKILL.md"
+cp "$REPO_ROOT/.claude-plugin/plugin.json" "$leg_ck/.claude-plugin/plugin.json"
+ln -s "$leg_ck/skills/setup" "$lsh/.claude/skills/greenroom-setup"
+HOME="$lsh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh errored on a legacy setup link"
+[ ! -L "$lsh/.claude/skills/greenroom-setup" ] \
+  || fail "a greenroom-setup link at the old skills/setup target survived, keeping the retired name registered"
+[ -f "$leg_ck/skills/setup/SKILL.md" ] || fail "migration deleted the other checkout's files, not just the link"
+ok "the pre-rename skills/setup link shape is migrated away too"
+
+# --- 49. a checkout with NO skills at all is a partial or corrupt clone, not a
+#          successful install of nothing. "0 of 0" satisfied `linked -lt found`, so
+#          it printed Done., linked the hollow commands, and exited 0. ---
+noskills="$T/noskillsclone"
+mkdir -p "$noskills/skills" "$noskills/commands"
+cp "$REPO_ROOT/install.sh" "$noskills/install.sh"
+cp "$REPO_ROOT"/commands/*.md "$noskills/commands/"
+nsh="$T/noskillshome"
+mkdir -p "$nsh/.claude"
+out15="$(HOME="$nsh" bash "$noskills/install.sh" 2>&1)" && rc15=0 || rc15=$?
+[ "$rc15" -ne 0 ] || fail "install.sh reported success from a checkout with no skills: $out15"
+[ ! -e "$nsh/.claude/commands/new.md" ] \
+  || fail "install.sh registered the hollow commands with no skill to invoke"
+echo "$out15" | grep -q "found no skills" || fail "install.sh did not name the cause: $out15"
+ok "a checkout with no skills fails loudly instead of installing nothing cheerfully"
+
+# --- 50. ownership checks resolve RELATIVE symlink targets. An install whose links
 #          were made from inside ~/.claude/skills (so the target is relative) is
 #          still ours, and must be migrated rather than mistaken for a user link. ---
 rh="$T/relhome"
@@ -1110,7 +1143,7 @@ HOME="$rh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh erro
   || fail "a relative-target root symlink was left exposing the plugin manifest"
 ok "ownership checks resolve relative symlink targets, not just absolute ones"
 
-# --- 49. a DANGLING link at the skill path is replaced, not skipped. This is what
+# --- 51. a DANGLING link at the skill path is replaced, not skipped. This is what
 #          our own link becomes once the clone is moved or renamed: ownership can no
 #          longer be proven, but a dead link helps nobody and a link the user
 #          actively uses is not dangling. Skipping here would make a re-run from
@@ -1124,7 +1157,7 @@ echo "$out6" | grep -q "SKIP skill greenroom" && fail "install.sh skipped a dang
 echo "$out6" | grep -q "dangling" || fail "install.sh replaced a dangling link without saying so: $out6"
 ok "a dangling link at the skill path is replaced, with a distinct message"
 
-# --- 50. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
+# --- 52. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
 #          user may have bound to their own repo, and a target on an unmounted
 #          volume or a moved clone reads as dangling too. The claim only holds for
 #          a path named for us. ---
@@ -1138,7 +1171,7 @@ echo "$out8" | grep -q "SKIP command new.md" || fail "install.sh did not report 
 [ -L "$dch/.claude/skills/greenroom" ] || fail "the skill itself was not installed"
 ok "a dangling link at a generic command name is left alone, unlike the skill path"
 
-# --- 51. re-cloning greenroom somewhere new and re-installing is a normal upgrade
+# --- 53. re-cloning greenroom somewhere new and re-installing is a normal upgrade
 #          path. The old clone is still on disk, so the link is neither ours-by-
 #          $REPO_DIR nor dangling -- keying ownership to $REPO_DIR alone turned that
 #          into a hard failure that installed nothing. ---
@@ -1158,7 +1191,7 @@ echo "$out7" | grep -q "repointed" || fail "install.sh repointed silently: $out7
 echo "$out7" | grep -q "SKIP skill greenroom" && fail "install.sh treated another greenroom clone as a user symlink: $out7"
 ok "re-installing from a second clone repoints the links instead of hard-failing"
 
-# --- 52. the SKILL.md path resolver actually resolves. It is the ONLY thing that
+# --- 54. the SKILL.md path resolver actually resolves. It is the ONLY thing that
 #          tells an agent where greenroom.py lives now that the commands are hollow,
 #          and it is prose -- nothing else would catch it drifting out of sync with
 #          the install shapes we ship. Extract the snippet and run it for each. ---
@@ -1302,7 +1335,7 @@ chmod -x "$proj/.claude/skills/greenroom/scripts/greenroom.py"
   && fail "the SKILL.md resolver reported success with no greenroom installed anywhere"
 ok "the SKILL.md path resolver finds the script in every install shape we ship"
 
-# --- 53. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+# --- 55. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
 "$SCRIPT" new markproj --parent "$T/mark" >/dev/null
 gm="$T/mark/markproj/.greenroom"
@@ -1323,7 +1356,7 @@ rm -f "$gm"
 [ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
 ok "sync adds .greenroom to a wrapper that lacks it"
 
-# --- 54. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+# --- 56. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
 fhm="$T/markforbid"
 mkdir -p "$fhm"
 mkrepo "$fhm/repo-public"
@@ -1335,7 +1368,7 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
-# --- 55. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# --- 57. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
 # GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
 # .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
 mkdir -p "$T/nows"
@@ -1371,7 +1404,7 @@ ok "--workspace forces the workspace file regardless of detection"
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
 
-# --- 56. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+# --- 58. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
 mkdir -p "$T/vscode"
 GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
 vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
@@ -1381,7 +1414,7 @@ mkdir -p "$T/vscode/vscodeproj/.vscode"
 [ -f "$vws" ] || fail "a present .vscode/ dir did not trigger the workspace write"
 ok "detection writes the workspace when .vscode/ exists even with no family binary"
 
-# --- 57. the block numbers themselves are unique and sequential. Inserting a test
+# --- 59. the block numbers themselves are unique and sequential. Inserting a test
 #          mid-file has collided the numbering twice now; duplicate identifiers make
 #          a failure ambiguous to triage, and nothing else notices. ---
 nums="$(grep -o '^# --- [0-9]*\.' "$0" | grep -o '[0-9]*')"
@@ -1392,7 +1425,7 @@ expected="$(seq 1 "$(printf '%s\n' "$nums" | wc -l | tr -d ' ')")"
   || fail "test block numbers are not a gapless 1..N sequence"
 ok "test block numbers are unique and sequential"
 
-# --- 58. every `## [x.y.z]` changelog heading has its reference-link definition.
+# --- 60. every `## [x.y.z]` changelog heading has its reference-link definition.
 #          Without one the heading renders with literal brackets on GitHub, which
 #          is invisible in the diff and only shows up on the released page. ---
 missing=""

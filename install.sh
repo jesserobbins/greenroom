@@ -92,6 +92,18 @@ skill_name_of() {
   sed -n 's/^name:[[:space:]]*//p' "$1" | head -1 | tr -d '[:space:]'
 }
 
+# is_legacy_setup_skill <dir>: true if <dir> is the skill directory of a greenroom
+# checkout under either name this path has ever pointed at -- `setup` (0.1.4-0.1.7,
+# linked as ~/.claude/skills/greenroom-setup -> <checkout>/skills/setup) or
+# `greenroom-setup` (0.1.8). Both are retired; a link to either must go.
+is_legacy_setup_skill() {
+  local declared
+  [ -d "$1" ] && [ -f "$1/SKILL.md" ] || return 1
+  declared="$(skill_name_of "$1/SKILL.md")"
+  case "$declared" in setup|greenroom-setup) ;; *) return 1 ;; esac
+  is_greenroom_checkout "$(dirname "$(dirname "$1")")"
+}
+
 # is_greenroom_checkout <dir>: true if <dir> is the root of a greenroom checkout.
 is_greenroom_checkout() {
   [ -f "$1/.claude-plugin/plugin.json" ] \
@@ -232,10 +244,13 @@ STALE="$SKILL_DEST/greenroom-setup"
 if points_at_repo "$STALE"; then
   rm "$STALE"
   echo "migrated: removed the stale greenroom-setup link (renamed to greenroom)"
-elif stale_dest="$(resolve_link "$STALE")" && looks_like_ours "$stale_dest" "$STALE"; then
+elif stale_dest="$(resolve_link "$STALE")" && is_legacy_setup_skill "$stale_dest"; then
   # A link into a DIFFERENT greenroom checkout that still exists on disk. Keyed
   # to $REPO_DIR alone this stayed registered forever after a re-clone -- exactly
-  # what this migration exists to prevent.
+  # what this migration exists to prevent. looks_like_ours is the wrong test here:
+  # it demands the target's name match the LINK's basename, and 0.1.4-0.1.7 linked
+  # this path at <checkout>/skills/setup, whose name is `setup`, not
+  # `greenroom-setup`. Accept either historical name.
   rm "$STALE"
   echo "migrated: removed a greenroom-setup link into another checkout at $stale_dest"
 elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
@@ -270,11 +285,19 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   if [ "$link_result" = "linked" ]; then skill_linked=$((skill_linked + 1)); fi
 done
 
+# A checkout with no skills/*/SKILL.md at all is a partial or corrupt clone, not
+# a successful install of nothing. Counted as a failure alongside a skipped skill,
+# or "0 of 0" would sail through both guards below.
+install_failed=""
+if [ "$skill_found" -eq 0 ] || [ "$skill_linked" -lt "$skill_found" ]; then
+  install_failed=yes
+fi
+
 # The commands are hollow -- each one just says "invoke the greenroom skill". If
 # the skill did not install, registering them hands the user a /new, /add, /sync
 # that fail at use time instead of failing here, where the remedy is printed.
 cmd_linked=0
-if [ "$skill_linked" -lt "$skill_found" ]; then
+if [ -n "$install_failed" ]; then
   echo "not linking the commands: they only invoke the skill, which did not install"
 else
   for cmd in "$REPO_DIR"/commands/*.md; do
@@ -291,7 +314,11 @@ echo "Done. $skill_linked skill(s) → $SKILL_DEST; $cmd_linked command(s) → $
 # A skill we ship did not get installed. The SKIPs above say what to do; exit
 # non-zero so the failure is not buried under a cheerful "Done." line -- a
 # partial install is a failed install, not a quiet no-op.
-if [ "$skill_linked" -lt "$skill_found" ]; then
-  echo "install.sh installed $skill_linked of $skill_found skill(s). See the SKIP notes above." >&2
+if [ -n "$install_failed" ]; then
+  if [ "$skill_found" -eq 0 ]; then
+    echo "install.sh found no skills under $REPO_DIR/skills/ -- is this a complete clone?" >&2
+  else
+    echo "install.sh installed $skill_linked of $skill_found skill(s). See the SKIP notes above." >&2
+  fi
   exit 1
 fi
