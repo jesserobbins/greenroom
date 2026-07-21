@@ -32,17 +32,28 @@ files, and session history stays in one bucket.
 
 The script ships beside this file, at `scripts/greenroom.py` under this skill's
 directory. Invoke it by its **absolute path** — where the script lives and what
-cwd you invoke it from are two different things:
+cwd you invoke it from are two different things, and several subcommands default
+a path argument to the current directory.
+
+The skill's directory differs per install shape (plugin, `npx skills add`,
+manual clone), so resolve it first and reuse `$greenroom` for every call:
 
 ```bash
-/abs/path/to/skills/greenroom/scripts/greenroom.py <subcommand> [args]
+for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" \
+         "$HOME/.claude/skills/greenroom" \
+         "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom; do
+  [ -x "$c/scripts/greenroom.py" ] && greenroom="$c/scripts/greenroom.py" && break
+done
+"$greenroom" <subcommand> [args]
 ```
 
-Several subcommands default a path argument to the current directory, so cwd
-matters. Pass the path explicitly, or run from the directory noted below.
+If that loop leaves `$greenroom` empty, this skill was loaded from a path none of
+those cover — locate `scripts/greenroom.py` under the directory this file was
+read from and use that.
 
-Pass `--help` (or `<subcommand> --help`) for the full flag list. The parser is
-the source of truth; do not re-document flags from prose.
+Pass the path argument explicitly, or run from the directory noted in the last
+column below. Pass `--help` (or `<subcommand> --help`) for the full flag list.
+The parser is the source of truth; do not re-document flags from prose.
 
 | Situation | Subcommand | Run from (if the path is omitted) |
 |---|---|---|

@@ -48,6 +48,17 @@ reaches a stable release.
   invocation is now `/greenroom:greenroom-setup`.
 
 ### Fixed
+- `install.sh` no longer replaces a symlink the user owns. It refreshed any
+  symlink at the skill path unconditionally, so a link the migration correctly
+  declined to touch was silently repointed one step later. Refreshing is now
+  ownership-checked like migration, and both checks resolve relative symlink
+  targets instead of only absolute ones.
+- The old script-root shim is dismantled by removing the two links we created,
+  not by `rm -rf` on the whole directory. Anything else the user left in there
+  survives, and the migration says so instead of deleting silently.
+- SKILL.md documents how to *find* `scripts/greenroom.py` — a resolver covering
+  the plugin, `npx skills add`, and manual-clone layouts — rather than naming an
+  absolute path the agent had no way to derive.
 - The skill's `description` no longer contains an unquoted colon-space (`layout:`
   → `layout —`). The `npx skills` YAML parser silently dropped the skill when the
   plain-scalar description value contained `: `, which made greenroom

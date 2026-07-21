@@ -14,34 +14,32 @@
 #  the manual path for a direct `git clone`.)
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 SKILL_DEST="$HOME/.claude/skills"
 CMD_DEST="$HOME/.claude/commands"
 mkdir -p "$SKILL_DEST" "$CMD_DEST"
 
-# link <target> <link-path> <label>: refresh our own symlinks, never clobber a
-# real file the user owns. Sets `link_result` to "linked" or "skip".
-link_one() {
-  local target="$1" link="$2" label="$3"
-  if [ -L "$link" ]; then
-    rm "$link"                                     # refresh existing symlink
-  elif [ -e "$link" ]; then
-    echo "SKIP $label: $link exists and is not a symlink (leaving it untouched)"
-    link_result="skip"
-    return
-  fi
-  ln -s "$target" "$link"
-  echo "linked $label"
-  link_result="linked"
+# resolve_link <path>: the absolute, normalized path a symlink points at. A
+# relative target (e.g. `../../src/greenroom`) is resolved against the link's own
+# directory, so an install whose links were made with a relative target is still
+# recognized as ours. Fails if <path> is not a symlink or its target's parent
+# does not exist.
+resolve_link() {
+  [ -L "$1" ] || return 1
+  local raw dir
+  raw="$(readlink "$1")" || return 1
+  case "$raw" in /*) ;; *) raw="$(dirname "$1")/$raw" ;; esac
+  dir="$(dirname "$raw")"
+  [ -d "$dir" ] || return 1
+  printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$(basename "$raw")"
 }
 
 # points_at_repo <path>: true if <path> is a symlink resolving into this repo.
-# Used to confirm a stale link is OURS before removing it; a symlink the user
-# placed at the same path is left alone.
+# Used to confirm a link is OURS before removing or refreshing it; a symlink the
+# user placed at the same path is left alone.
 points_at_repo() {
-  [ -L "$1" ] || return 1
   local dest
-  dest="$(cd "$(dirname "$1")" && readlink "$1")"
+  dest="$(resolve_link "$1")" || return 1
   case "$dest" in "$REPO_DIR"|"$REPO_DIR"/*) return 0 ;; *) return 1 ;; esac
 }
 
@@ -50,10 +48,32 @@ points_at_repo() {
 # as the ancient root symlink but points at $REPO_DIR/skills/greenroom, so the
 # root migration below must not match it.
 points_at_repo_root() {
-  [ -L "$1" ] || return 1
   local dest
-  dest="$(cd "$(dirname "$1")" && readlink "$1")"
-  case "$dest" in "$REPO_DIR"|"$REPO_DIR"/) return 0 ;; *) return 1 ;; esac
+  dest="$(resolve_link "$1")" || return 1
+  [ "$dest" = "$REPO_DIR" ]
+}
+
+# link <target> <link-path> <label>: refresh our own symlinks, never clobber
+# anything the user owns -- neither a real file nor a symlink of their own.
+# Sets `link_result` to "linked" or "skip".
+link_one() {
+  local target="$1" link="$2" label="$3"
+  if [ -L "$link" ]; then
+    if points_at_repo "$link"; then
+      rm "$link"                                   # our own link: refresh it
+    else
+      echo "SKIP $label: $link is a symlink into somewhere else (leaving it untouched)"
+      link_result="skip"
+      return
+    fi
+  elif [ -e "$link" ]; then
+    echo "SKIP $label: $link exists and is not a symlink (leaving it untouched)"
+    link_result="skip"
+    return
+  fi
+  ln -s "$target" "$link"
+  echo "linked $label"
+  link_result="linked"
 }
 
 # Migration 1: older installers created ~/.claude/skills/greenroom as a plain
@@ -72,8 +92,17 @@ if [ -L "$OLD_SHIM" ]; then
   fi
 elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   if points_at_repo "$OLD_SHIM/scripts" || points_at_repo "$OLD_SHIM/templates"; then
-    rm -rf "$OLD_SHIM"
-    echo "migrated: removed the old script-root shim at $OLD_SHIM"
+    # Remove only the two links we created, then rmdir. If the user dropped
+    # anything else in here, the rmdir fails and their files survive -- better a
+    # loud SKIP than a silent `rm -rf` of a directory we only partly own.
+    for owned in scripts templates; do
+      if points_at_repo "$OLD_SHIM/$owned"; then rm -f "$OLD_SHIM/$owned"; fi
+    done
+    if rmdir "$OLD_SHIM" 2>/dev/null; then
+      echo "migrated: removed the old script-root shim at $OLD_SHIM"
+    else
+      echo "SKIP migration: $OLD_SHIM still holds files we did not create (leaving it untouched)"
+    fi
   else
     echo "SKIP migration: $OLD_SHIM is a directory we do not recognize (leaving it untouched)"
   fi

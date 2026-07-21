@@ -822,7 +822,17 @@ mkdir -p "$T/isoparent"
 [ -d "$T/isoparent/isoproj/isoproj-private/docs" ] || fail "isolated payload did not create the private buckets"
 [ -f "$T/isoparent/isoproj/isoproj-private/AGENTS.md" ] || fail "isolated payload could not render its templates"
 [ -f "$T/isoparent/isoproj/.greenroom" ] || fail "isolated payload did not write the .greenroom marker"
-ok "skills/greenroom/ is self-sufficient: it scaffolds with no other repo file present"
+# SKILL.md routes to `sync` and `collect` too, and to references/*.md. A typo in a
+# router link is a dead pointer -- the same "documented but not shipped" bug class. ---
+for ref in $(grep -o 'references/[a-z-]*\.md' "$iso/greenroom/SKILL.md" | sort -u); do
+  [ -f "$iso/greenroom/$ref" ] || fail "SKILL.md routes to $ref, which is not in the payload"
+done
+( cd "$iso/greenroom" && ./scripts/greenroom.py collect --help ) >/dev/null \
+  || fail "the isolated payload cannot run the collect subcommand"
+( cd "$T/isoparent/isoproj/isoproj-public" && "$iso/greenroom/scripts/greenroom.py" sync ) >/dev/null \
+  || fail "the isolated payload cannot sync the wrapper it just scaffolded"
+[ -f "$T/isoparent/isoproj/README.md" ] || fail "isolated-payload sync did not write the wrapper repo map"
+ok "skills/greenroom/ is self-sufficient: it scaffolds, syncs, and ships every reference it routes to"
 
 # --- 30. context budget. A loaded skill stays resident across turns, and the
 #         description sits in the skill listing every session. Both regrow silently
@@ -833,12 +843,15 @@ skill_words="$(wc -w < "$SKILL_MD" | tr -d ' ')"
 [ "$skill_words" -le 1200 ] || fail "SKILL.md is $skill_words words (budget: 1200)"
 ok "context budget holds (description ${desc_len}c, SKILL.md ${skill_words}w)"
 
-# --- 31. no plugin-only variables in skill content. ${CLAUDE_PLUGIN_ROOT} is
-#         defined only by the Claude Code plugin runtime; it is unset under
-#         `npx skills add` and under every other harness. ---
-! grep -rq 'CLAUDE_PLUGIN_ROOT' "$REPO_ROOT/skills/" \
-  || fail "skills/ references \${CLAUDE_PLUGIN_ROOT}, which is undefined on a standalone install"
-ok "skill content uses no plugin-only path variables"
+# --- 31. no UNCONDITIONAL reliance on plugin-only variables. ${CLAUDE_PLUGIN_ROOT}
+#         is defined only by the Claude Code plugin runtime; it is unset under
+#         `npx skills add` and under every other harness. The path resolver may
+#         probe it, but only with a `:-` default so an unset value degrades to a
+#         miss instead of an empty-prefix path. ---
+bare_ref="$(grep -rn 'CLAUDE_PLUGIN_ROOT' "$REPO_ROOT/skills/" | grep -v 'CLAUDE_PLUGIN_ROOT:-' || true)"
+[ -z "$bare_ref" ] \
+  || fail "skills/ uses \${CLAUDE_PLUGIN_ROOT} without a :- default (undefined on a standalone install): $bare_ref"
+ok "skill content relies on no plugin-only path variable"
 
 # --- 32. commands stay hollow. They are Claude-Code-only sugar; `npx skills` never
 #         reads commands/. Any logic here is logic a skills.sh user cannot reach. ---
@@ -895,14 +908,21 @@ HOME="$gh_mig" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh 
 ok "an old greenroom->repo-root symlink is migrated to the real skill link"
 
 # --- 37. an UNRELATED symlink the user placed at the skill path is NOT removed,
-#          repointed, or written through (migration only touches links into this repo) ---
+#          repointed, or written through. Migration skips it on ownership, and
+#          link_one must skip it too -- otherwise the link survives migration only
+#          to be silently replaced one step later. ---
 ug="$T/unrelhome"
 mkdir -p "$ug/.claude/skills" "$ug/somewhere-else"
 ln -s "$ug/somewhere-else" "$ug/.claude/skills/greenroom"        # user's own symlink, not ours
-HOME="$ug" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 && rc=0 || rc=$?
+out4="$(HOME="$ug" bash "$REPO_ROOT/install.sh" 2>&1)" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || fail "install.sh errored on an unrelated user symlink (rc=$rc)"
 [ ! -e "$ug/somewhere-else/SKILL.md" ] || fail "install.sh wrote THROUGH the unrelated symlink into the user's dir"
-ok "an unrelated user symlink at the skill path is not written through"
+[ -L "$ug/.claude/skills/greenroom" ] || fail "install.sh removed an unrelated user symlink at the skill path"
+[ "$(readlink "$ug/.claude/skills/greenroom")" = "$ug/somewhere-else" ] \
+  || fail "install.sh repointed an unrelated user symlink at the skill path"
+echo "$out4" | grep -q "SKIP skill greenroom" \
+  || fail "install.sh did not report skipping the unrelated user symlink: $out4"
+ok "an unrelated user symlink at the skill path is left exactly as the user made it"
 
 # --- 38. install.sh never clobbers a real (non-symlink) file the user owns ---
 ch="$T/clobberhome"
@@ -912,6 +932,36 @@ out3="$(HOME="$ch" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh error
 echo "$out3" | grep -q "SKIP skill greenroom" || fail "install.sh did not SKIP a pre-existing real greenroom file"
 [ "$(cat "$ch/.claude/skills/greenroom")" = "do not touch" ] || fail "install.sh clobbered a real user file"
 ok "install.sh skips (never clobbers) a real user file at the skill target"
+
+# --- 39. the shim migration removes only the two links we created. A user file
+#          dropped into the old shim dir must survive, and the migration must say
+#          so rather than `rm -rf`-ing the whole directory. ---
+kh="$T/keephome"
+mkdir -p "$kh/.claude/skills/greenroom"
+ln -s "$REPO_ROOT/skills/greenroom/scripts" "$kh/.claude/skills/greenroom/scripts"
+echo "mine" > "$kh/.claude/skills/greenroom/notes.md"
+out5="$(HOME="$kh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a shim holding a user file"
+[ -f "$kh/.claude/skills/greenroom/notes.md" ] || fail "shim migration destroyed a user file it did not create"
+[ ! -e "$kh/.claude/skills/greenroom/scripts" ] || fail "shim migration left our own stale scripts link behind"
+echo "$out5" | grep -q "SKIP migration" || fail "shim migration removed nothing but stayed silent: $out5"
+ok "the shim migration removes only our links and reports what it left behind"
+
+# --- 40. ownership checks resolve RELATIVE symlink targets. An install whose links
+#          were made from inside ~/.claude/skills (so the target is relative) is
+#          still ours, and must be migrated rather than mistaken for a user link. ---
+rh="$T/relhome"
+mkdir -p "$rh/.claude/skills"
+# relpath is textual, so compute it from the PHYSICAL dirs -- on macOS $TMPDIR is
+# itself under a symlink and a logical relpath would yield a dangling link.
+( cd "$rh/.claude/skills" && ln -s "$(python3 -c \
+    'import os,sys; print(os.path.relpath(os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])))' \
+    "$REPO_ROOT" .)" greenroom )                                    # relative root symlink, still ours
+[ -e "$rh/.claude/skills/greenroom/install.sh" ] || fail "test bug: the relative fixture link is dangling"
+HOME="$rh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh errored on a relative-target link"
+[ -f "$rh/.claude/skills/greenroom/SKILL.md" ] || fail "a relative-target root symlink was not migrated to the skill link"
+[ ! -e "$rh/.claude/skills/greenroom/.claude-plugin/plugin.json" ] \
+  || fail "a relative-target root symlink was left exposing the plugin manifest"
+ok "ownership checks resolve relative symlink targets, not just absolute ones"
 
 # --- 39. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
