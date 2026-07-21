@@ -1,7 +1,7 @@
 {
   "name": "greenroom",
-  "description": "Keep your private superpowers docs, designs, plans, drafts, and review notes in a private repo right beside the public code \u2014 so you do high-quality work in the open without leaking your raw thinking. The public repo is the stage; the private repo is the green room.",
-  "version": "0.1.8-alpha",
+  "description": "Keep your private superpowers docs, designs, plans, drafts, and review notes in a private repo right beside the public code — so you do high-quality work in the open without leaking your raw thinking. The public repo is the stage; the private repo is the green room.",
+  "version": "0.2.0-alpha",
   "author": {
     "name": "Jesse Robbins",
     "email": "code@jesserobbins.com"
@@ -19,5 +19,11 @@
     "open-source",
     "monorepo",
     "vscode"
+  ],
+  "skills": [
+    "./skills/greenroom"
+  ],
+  "commands": [
+    "./commands"
   ]
 }

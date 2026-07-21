@@ -7,8 +7,40 @@ reaches a stable release.
 
 ## [Unreleased]
 
+### Added
+- greenroom installs as a standalone skill on any agent:
+  `npx skills add jesserobbins/greenroom`. The `skills/greenroom/` directory is
+  now self-sufficient — it carries its own `scripts/` and `templates/` — because
+  that directory, and nothing else, is what the skills CLI copies. A smoke test
+  drives a full scaffold from an isolated copy of it to keep that guarantee
+  honest.
+- `.claude-plugin/plugin.json` declares its `skills` and `commands` explicitly.
+
 ### Changed
-- The skill is renamed from `setup` to `greenroom-setup`. The `npx skills` CLI
+- **Breaking:** the skill is renamed `greenroom-setup` → `greenroom`, so the
+  plugin invocation is now `/greenroom:greenroom` and a standalone install is
+  `/greenroom`. The name covered only one of its four subcommands. Plugin users
+  need no action; `install.sh` migrates a manual install in place.
+- `scripts/` and `templates/` moved from the repo root into
+  `skills/greenroom/`. `greenroom.py` resolves templates relative to its own
+  location, so this needed no code change.
+- Slash commands are now hollow triggers that hold no logic — all behaviour
+  lives in the skill. `npx skills` never reads `commands/`, so anything encoded
+  there is unreachable for standalone users.
+- SKILL.md is a router: detail moved into `skills/greenroom/references/`, which
+  costs nothing until read, and flag documentation defers to `--help`. Resident
+  context for a typical session drops roughly 72% (~4,650 → ~1,300 tokens) with
+  no functionality removed. Smoke tests assert the budget so it cannot silently
+  regrow.
+- `install.sh` no longer builds a `~/.claude/skills/greenroom/` script-root
+  shim; the skill directory carries its own script. It migrates the old shim and
+  the stale `greenroom-setup` link, both ownership-checked.
+- Smoke tests now parse SKILL.md frontmatter as YAML rather than asserting a
+  fixed description string. The skills CLI silently drops a skill whose
+  frontmatter fails to parse, so the class of bug matters more than the instance.
+
+### Previously
+- The skill was renamed from `setup` to `greenroom-setup`. The `npx skills` CLI
   derives a skill's install directory and `@handle` from the `name:` field, so a
   bare `name: setup` installed as `~/.claude/skills/setup/` and collided with any
   other ecosystem skill named `setup`. Naming it `greenroom-setup` keeps the

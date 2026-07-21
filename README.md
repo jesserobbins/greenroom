@@ -2,7 +2,12 @@
 
 > greenroom is a skill that sets up and maintains private spaces for working on your [superpowers](https://github.com/obra/Superpowers) docs, designs, plans, PRDs, and more until you decide what you want to share publicly.
 
+[![skills.sh](https://skills.sh/b/jesserobbins/greenroom)](https://skills.sh/jesserobbins/greenroom)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+```bash
+npx skills add jesserobbins/greenroom
+```
 
 ## Why greenroom?
 
@@ -29,7 +34,20 @@ The parent folder has no `.git/` of its own. It's an organizational container, s
 
 **Requirements:** macOS or Linux (Windows is supported via WSL2, which presents a Linux environment). You need Python 3 and `git` on your `PATH`; the manual install also needs `bash`. greenroom uses POSIX paths and `$HOME` semantics, so native Windows (cmd/PowerShell) is not supported, and the script refuses to run there.
 
-### As a Claude Code plugin (recommended)
+Two ways to install, two philosophies:
+
+- **[skills.sh](https://skills.sh/jesserobbins/greenroom)** copies greenroom into your project (or `-g` for globally), so you can hack on it and make it your own. Works across Claude Code, Codex, Cursor, and the 70+ other agents the skills CLI supports.
+- **The Claude Code plugin** keeps it as a read-only, always-current bundle you don't edit, and adds the `/greenroom:*` slash commands. Best when you just want it to work and follow along as it evolves.
+
+### As a standalone skill (any agent)
+
+```bash
+npx skills add jesserobbins/greenroom
+```
+
+The whole skill directory is installed — `SKILL.md`, the script, and the templates — so it is fully functional with no other setup. Invoke it as `/greenroom` or just describe what you want.
+
+### As a Claude Code plugin (recommended for Claude Code)
 
 ```
 /plugin marketplace add jesserobbins/greenroom
@@ -46,7 +64,7 @@ cd greenroom
 ./install.sh
 ```
 
-`install.sh` symlinks the skill into `~/.claude/skills/greenroom-setup` (namespaced so it invokes as `/greenroom-setup`, not a generic `/setup`) and the slash commands into `~/.claude/commands/`. It also creates `~/.claude/skills/greenroom/` as a plain directory holding `scripts/` and `templates/` symlinks, so the commands' script-path fallback and the `collect` examples below resolve `greenroom.py`. It's idempotent and never clobbers a real file you own.
+`install.sh` symlinks the skill into `~/.claude/skills/greenroom` and the slash commands into `~/.claude/commands/`. The skill directory carries its own `scripts/` and `templates/`, so nothing else needs wiring. It's idempotent, never clobbers a real file you own, and cleans up the layout left by earlier versions.
 
 A manual install registers the commands without the plugin namespace, so the examples below that read `/greenroom:new`, `/greenroom:add`, and `/greenroom:sync` are invoked as `/new`, `/add`, and `/sync`. The plugin install is the recommended path and gives you the namespaced form.
 
@@ -71,7 +89,7 @@ The most common case is running it from inside a repo you've already cloned, so 
 /greenroom:new <name>                        # leave the public side for later
 ```
 
-Add `--with-private-fork` to either command and the script also scaffolds a `<name>-private-fork/` alongside: a private dev checkout cloned from the local `-public` repo, with its remote named `upstream` so `origin` stays free for a private GitHub repo. The full three-repo shape is `<name>-public` (the stage), `<name>-private-fork` (private dev), and `<name>-private` (the green room). Both commands run the same script (`scripts/greenroom.py`, subcommands `retrofit` and `new`) and accept `--public-name` / `--private-name` overrides when the defaults don't fit.
+Add `--with-private-fork` to either command and the script also scaffolds a `<name>-private-fork/` alongside: a private dev checkout cloned from the local `-public` repo, with its remote named `upstream` so `origin` stays free for a private GitHub repo. The full three-repo shape is `<name>-public` (the stage), `<name>-private-fork` (private dev), and `<name>-private` (the green room). Both commands run the same script (`skills/greenroom/scripts/greenroom.py`, subcommands `retrofit` and `new`) and accept `--public-name` / `--private-name` overrides when the defaults don't fit.
 
 **Add more repos to a project later**, like a fork to PR from or another clone:
 
@@ -113,7 +131,7 @@ As a safety net for a stray launch *inside* one repo, the script also writes a g
 
 ## Recovering docs already in public history
 
-If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo. The script path below assumes a manual `install.sh` install; on a plugin install the script lives under `~/.claude/plugins/` instead, so prefer the `/greenroom:*` slash commands or substitute that path:
+If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo. The script always sits inside the skill directory; the path below is where a manual or `npx skills add -g` install puts it. On a plugin install it lives under `~/.claude/plugins/` instead, so prefer the `/greenroom:*` slash commands or substitute that path:
 
 ```
 cd <parent>/<project>-public
@@ -135,7 +153,7 @@ tests/smoke.sh
 
 greenroom was built using greenroom: this repo is the stage, and the drafts, design notes, and launch thinking behind it live in a private green room right next to it. Nothing from there ships, which is the whole point.
 
-`skills/greenroom-setup/SKILL.md` carries the full conventions, edge cases, and the agent-facing instructions. The slash-command definitions live in `commands/`. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
+`skills/greenroom/SKILL.md` carries the agent-facing instructions, with the detail in `skills/greenroom/references/`. The script and templates live inside that same directory, which is the entire installable payload. The slash-command definitions in `commands/` are thin triggers that hold no logic. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
 
 ## License
 

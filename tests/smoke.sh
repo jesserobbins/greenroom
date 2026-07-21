@@ -10,7 +10,7 @@
 # Run: greenroom/tests/smoke.sh   (exits non-zero on any failure)
 set -euo pipefail
 
-SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/greenroom.py"
+SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/skills/greenroom/scripts/greenroom.py"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 pass=0
@@ -771,106 +771,143 @@ printf '\xff\xfe\x00bad' > "$T/badenc/x.code-workspace"                         
 [ "$rc" -ne 0 ] || fail "an undecodable .code-workspace wrongly qualified a wrapper"
 ok "an undecodable .code-workspace is skipped without crashing classification"
 
-# --- 28. skill is named greenroom-setup so it installs collision-free on skills.sh.
-#         The npx skills CLI derives the install dir + handle from the `name:` field,
-#         not the repo directory, so a bare `name: setup` would land as ~/.claude/skills/setup/
-#         and collide with any other ecosystem `setup` skill. Naming it greenroom-setup
-#         keeps the plugin, manual-install, and skills.sh handles identical. ---
+# --- 28. skill identity + frontmatter actually parses as YAML.
+#         The npx skills CLI derives the install dir and registry slug from the
+#         `name:` field, not the repo directory, and parseSkillMd() wraps the YAML
+#         parse in try/catch returning null -- so malformed frontmatter makes the
+#         skill vanish from the registry with NO error. Assert it parses, rather
+#         than asserting one fixed string, so any future breakage is caught. ---
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[ -f "$REPO_ROOT/skills/greenroom-setup/SKILL.md" ] || fail "skills/greenroom-setup/SKILL.md is missing"
-[ ! -f "$REPO_ROOT/SKILL.md" ] || fail "a root SKILL.md still exists (would invoke as /greenroom:greenroom)"
-[ ! -e "$REPO_ROOT/skills/setup" ] || fail "a bare skills/setup/ still exists (collision risk on skills.sh)"
-grep -q '^name: greenroom-setup$' "$REPO_ROOT/skills/greenroom-setup/SKILL.md" || fail "skills/greenroom-setup/SKILL.md frontmatter name is not 'greenroom-setup'"
-desc_line="$(sed -n 's/^description: //p' "$REPO_ROOT/skills/greenroom-setup/SKILL.md" | head -1)"
-case "$desc_line" in *": "*) fail "description has an unquoted colon-space (npx skills YAML parser drops the skill)";; esac
-ok "skill lives at skills/greenroom-setup/ with name: greenroom-setup and no root SKILL.md"
+SKILL_MD="$REPO_ROOT/skills/greenroom/SKILL.md"
+[ -f "$SKILL_MD" ] || fail "skills/greenroom/SKILL.md is missing"
+[ ! -f "$REPO_ROOT/SKILL.md" ] || fail "a root SKILL.md exists (whole repo would install as one skill)"
+[ ! -e "$REPO_ROOT/skills/greenroom-setup" ] || fail "the old skills/greenroom-setup/ still exists"
+python3 - "$SKILL_MD" <<'PY' || fail "SKILL.md frontmatter is not valid, parseable YAML"
+import re, sys, pathlib
+raw = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", raw, re.S)
+assert m, "no frontmatter block at the very start of the file"
+try:
+    import yaml
+    data = yaml.safe_load(m.group(1))
+except ImportError:                     # no PyYAML: fall back to a strict line check
+    data = {}
+    for line in m.group(1).splitlines():
+        k, _, v = line.partition(":")
+        assert _ and not k.startswith(" "), f"unparseable frontmatter line: {line!r}"
+        data[k.strip()] = v.strip()
+assert isinstance(data, dict), "frontmatter is not a mapping"
+for field in ("name", "description"):
+    assert isinstance(data.get(field), str) and data[field], f"{field} missing or not a string"
+assert data["name"] == "greenroom", f"name is {data['name']!r}, expected 'greenroom'"
+assert len(data["description"]) <= 1024, "description exceeds the 1024-char spec cap"
+PY
+ok "SKILL.md frontmatter parses as YAML with name: greenroom"
 
-# --- 29. manual install: namespaced skill name + script resolves at the tier-3 path (issue #3) ---
+# --- 29. PAYLOAD SELF-SUFFICIENCY. `npx skills add` copies skills/greenroom/ and
+#         nothing else. Copy that directory ALONE into a bare temp dir and drive a
+#         full scaffold from it. This is the exact failure mode that shipped before:
+#         a SKILL.md documenting a script and templates that were not in the payload. ---
+iso="$T/isolated"
+mkdir -p "$iso"
+cp -R "$REPO_ROOT/skills/greenroom" "$iso/greenroom"
+[ -x "$iso/greenroom/scripts/greenroom.py" ] || fail "greenroom.py is not executable in the copied payload"
+mkdir -p "$T/isoparent"
+( cd "$iso/greenroom" && ./scripts/greenroom.py new isoproj --init-public --parent "$T/isoparent" ) >/dev/null \
+  || fail "the standalone skill payload cannot scaffold a project"
+[ -d "$T/isoparent/isoproj/isoproj-public/.git" ] || fail "isolated payload did not init the public repo"
+[ -d "$T/isoparent/isoproj/isoproj-private/docs" ] || fail "isolated payload did not create the private buckets"
+[ -f "$T/isoparent/isoproj/isoproj-private/AGENTS.md" ] || fail "isolated payload could not render its templates"
+[ -f "$T/isoparent/isoproj/.greenroom" ] || fail "isolated payload did not write the .greenroom marker"
+ok "skills/greenroom/ is self-sufficient: it scaffolds with no other repo file present"
+
+# --- 30. context budget. A loaded skill stays resident across turns, and the
+#         description sits in the skill listing every session. Both regrow silently
+#         unless asserted. ---
+desc_len="$(sed -n 's/^description: //p' "$SKILL_MD" | head -1 | tr -d '\n' | wc -c | tr -d ' ')"
+[ "$desc_len" -le 400 ] || fail "description is $desc_len chars (budget: 400)"
+skill_words="$(wc -w < "$SKILL_MD" | tr -d ' ')"
+[ "$skill_words" -le 1200 ] || fail "SKILL.md is $skill_words words (budget: 1200)"
+ok "context budget holds (description ${desc_len}c, SKILL.md ${skill_words}w)"
+
+# --- 31. no plugin-only variables in skill content. ${CLAUDE_PLUGIN_ROOT} is
+#         defined only by the Claude Code plugin runtime; it is unset under
+#         `npx skills add` and under every other harness. ---
+! grep -rq 'CLAUDE_PLUGIN_ROOT' "$REPO_ROOT/skills/" \
+  || fail "skills/ references \${CLAUDE_PLUGIN_ROOT}, which is undefined on a standalone install"
+ok "skill content uses no plugin-only path variables"
+
+# --- 32. commands stay hollow. They are Claude-Code-only sugar; `npx skills` never
+#         reads commands/. Any logic here is logic a skills.sh user cannot reach. ---
+for cmd in "$REPO_ROOT"/commands/*.md; do
+  lines="$(wc -l < "$cmd" | tr -d ' ')"
+  [ "$lines" -le 15 ] || fail "$(basename "$cmd") is $lines lines (hollow-command budget: 15)"
+  ! grep -q '```' "$cmd" || fail "$(basename "$cmd") contains a code block (logic belongs in the skill)"
+done
+ok "slash commands are hollow triggers with no embedded logic"
+
+# --- 33. manual install links the skill, and the script + templates come with it ---
 mh="$T/manualhome"
 mkdir -p "$mh"
 HOME="$mh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh failed"
-[ -L "$mh/.claude/skills/greenroom-setup" ] || fail "manual install did not create /greenroom-setup (namespaced)"
-[ ! -e "$mh/.claude/skills/setup" ] || fail "manual install created a bare /setup (collision risk)"
-[ -e "$mh/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "tier-3 fallback ~/.claude/skills/greenroom/scripts/greenroom.py does not resolve"
-[ -f "$mh/.claude/skills/greenroom-setup/SKILL.md" ] || fail "the namespaced skill link does not expose a SKILL.md"
-ok "manual install gives /greenroom-setup and resolves the script at the tier-3 path"
+[ -L "$mh/.claude/skills/greenroom" ] || fail "manual install did not create the /greenroom skill link"
+[ -f "$mh/.claude/skills/greenroom/SKILL.md" ] || fail "the skill link does not expose a SKILL.md"
+[ -e "$mh/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "the skill link does not expose scripts/"
+[ -e "$mh/.claude/skills/greenroom/templates/private_AGENTS.md" ] || fail "the skill link does not expose templates/"
+[ ! -e "$mh/.claude/skills/greenroom-setup" ] || fail "manual install still creates the old greenroom-setup name"
+ok "manual install gives /greenroom with its script and templates attached"
 
-# --- 30. the script-root is a plain dir of targeted symlinks, NOT the repo root.
-#         Symlinking the whole root would expose .claude-plugin/plugin.json and the
-#         nested skills/, which Claude Code auto-loads as a `greenroom@skills-dir`
-#         plugin (a second /greenroom:greenroom-setup registration, via a path we did not intend). ---
-[ ! -L "$mh/.claude/skills/greenroom" ] || fail "script-root is a symlink to the repo root (would expose the plugin manifest)"
-[ -d "$mh/.claude/skills/greenroom" ] || fail "script-root is not a directory"
-[ ! -e "$mh/.claude/skills/greenroom/.claude-plugin/plugin.json" ] || fail "script-root exposes .claude-plugin/plugin.json (auto-loads as greenroom@skills-dir)"
-[ ! -e "$mh/.claude/skills/greenroom/skills" ] || fail "script-root exposes a nested skills/ (auto-registers the nested skill)"
-[ ! -f "$mh/.claude/skills/greenroom/SKILL.md" ] || fail "script-root has a SKILL.md (would register as /greenroom)"
-[ -e "$mh/.claude/skills/greenroom/templates/private_AGENTS.md" ] || fail "script-root does not expose templates/ (greenroom.py reads them at runtime)"
-ok "script-root exposes only scripts/ and templates/, no manifest or nested skill"
-
-# --- 31. the script resolves templates correctly through the symlinked tier-3 path ---
-HOME="$mh" python3 - "$mh" >/dev/null <<'PY' || fail "greenroom.py cannot resolve its templates via the tier-3 path"
-import sys
-from pathlib import Path
-script = Path(sys.argv[1]) / ".claude/skills/greenroom/scripts/greenroom.py"
-SKILL_DIR = script.resolve().parent.parent
-assert (SKILL_DIR / "templates" / "private_AGENTS.md").exists(), "templates unreachable after resolve"
-PY
-ok "greenroom.py resolves its templates through the tier-3 symlink"
-
-# --- 32. manual install is idempotent: a second run links nothing new and errors nothing ---
+# --- 34. manual install is idempotent: a second run links nothing new and errors nothing ---
 out2="$(HOME="$mh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "second install.sh run errored"
 echo "$out2" | grep -q "SKIP" && fail "second install.sh run hit an unexpected SKIP: $out2"
-[ -L "$mh/.claude/skills/greenroom-setup" ] || fail "idempotent run dropped the greenroom-setup link"
-[ -e "$mh/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "idempotent run dropped script resolution"
+[ -L "$mh/.claude/skills/greenroom" ] || fail "idempotent run dropped the greenroom link"
 ok "manual install is idempotent (re-run is clean, links stable)"
 
-# --- 33. migration: an older installer's greenroom->repo-root symlink is replaced
-#          by a script-only dir, so the plugin manifest is no longer exposed (issue #3) ---
+# --- 35. migration: the old script-root shim (a real dir of our symlinks, no
+#          SKILL.md) sat at exactly the path the renamed skill now claims. Left in
+#          place it is not a symlink, so link_one would SKIP it and the install
+#          would silently no-op. It must be detected and removed. ---
+sh_mig="$T/shimhome"
+mkdir -p "$sh_mig/.claude/skills/greenroom"
+ln -s "$REPO_ROOT/skills/greenroom/scripts" "$sh_mig/.claude/skills/greenroom/scripts"
+ln -s "$REPO_ROOT/skills/greenroom/templates" "$sh_mig/.claude/skills/greenroom/templates"
+ln -s "$REPO_ROOT/skills/greenroom" "$sh_mig/.claude/skills/greenroom-setup"   # old skill name too
+HOME="$sh_mig" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh errored migrating the old shim"
+[ -L "$sh_mig/.claude/skills/greenroom" ] || fail "the old shim dir was not replaced by the skill symlink"
+[ -f "$sh_mig/.claude/skills/greenroom/SKILL.md" ] || fail "post-migration greenroom link has no SKILL.md"
+[ ! -e "$sh_mig/.claude/skills/greenroom-setup" ] || fail "the stale greenroom-setup link survived migration"
+ok "the old script-root shim and the greenroom-setup link are migrated away"
+
+# --- 36. migration: an even older installer symlinked this path straight at the
+#          repo root, which exposed .claude-plugin/plugin.json. ---
 gh_mig="$T/mighome"
 mkdir -p "$gh_mig/.claude/skills"
 ln -s "$REPO_ROOT" "$gh_mig/.claude/skills/greenroom"            # simulate the old root-symlink layout
 HOME="$gh_mig" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh errored migrating an old root symlink"
-[ ! -L "$gh_mig/.claude/skills/greenroom" ] || fail "old greenroom root symlink survived (manifest still exposed)"
-[ -d "$gh_mig/.claude/skills/greenroom" ] || fail "migration did not leave a real script-root dir"
+[ -f "$gh_mig/.claude/skills/greenroom/SKILL.md" ] || fail "migration did not leave a working skill link"
 [ ! -e "$gh_mig/.claude/skills/greenroom/.claude-plugin/plugin.json" ] || fail "migration left the plugin manifest exposed"
-[ -e "$gh_mig/.claude/skills/greenroom/scripts/greenroom.py" ] || fail "migration broke script resolution"
-ok "old greenroom root symlink is migrated to a manifest-free script-root dir"
+ok "an old greenroom->repo-root symlink is migrated to the real skill link"
 
-# --- 34. an UNRELATED symlink the user placed at the script-root path is NOT removed,
-#          repointed, OR written through (migration only touches a symlink that points
-#          at this repo; an unrelated one is skipped, not followed) (iter-2 codex L / pi M) ---
+# --- 37. an UNRELATED symlink the user placed at the skill path is NOT removed,
+#          repointed, or written through (migration only touches links into this repo) ---
 ug="$T/unrelhome"
 mkdir -p "$ug/.claude/skills" "$ug/somewhere-else"
 ln -s "$ug/somewhere-else" "$ug/.claude/skills/greenroom"        # user's own symlink, not ours
 HOME="$ug" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 && rc=0 || rc=$?
 [ "$rc" -eq 0 ] || fail "install.sh errored on an unrelated user symlink (rc=$rc)"
-[ -L "$ug/.claude/skills/greenroom" ] || fail "install.sh removed an unrelated user symlink at the script-root path"
-[ "$(cd "$(dirname "$ug/.claude/skills/greenroom")" && readlink "$ug/.claude/skills/greenroom")" = "$ug/somewhere-else" ] \
-  || fail "install.sh repointed an unrelated user symlink"
-[ ! -e "$ug/somewhere-else/scripts" ] || fail "install.sh wrote scripts/ THROUGH the unrelated symlink into the user's dir"
-[ ! -e "$ug/somewhere-else/templates" ] || fail "install.sh wrote templates/ THROUGH the unrelated symlink into the user's dir"
-ok "an unrelated user symlink at the script-root path is left untouched and not written through"
+[ ! -e "$ug/somewhere-else/SKILL.md" ] || fail "install.sh wrote THROUGH the unrelated symlink into the user's dir"
+ok "an unrelated user symlink at the skill path is not written through"
 
-# --- 35. install.sh never clobbers a real (non-symlink) file the user owns at a target path ---
+# --- 38. install.sh never clobbers a real (non-symlink) file the user owns ---
 ch="$T/clobberhome"
 mkdir -p "$ch/.claude/skills"
-echo "do not touch" > "$ch/.claude/skills/greenroom-setup"        # a real file, not our symlink
+echo "do not touch" > "$ch/.claude/skills/greenroom"              # a real file, not our symlink
 out3="$(HOME="$ch" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a pre-existing real file"
-echo "$out3" | grep -q "SKIP skill greenroom-setup" || fail "install.sh did not SKIP a pre-existing real greenroom-setup"
-[ "$(cat "$ch/.claude/skills/greenroom-setup")" = "do not touch" ] || fail "install.sh clobbered a real user file"
-ok "install.sh skips (never clobbers) a real user file at a skill target"
+echo "$out3" | grep -q "SKIP skill greenroom" || fail "install.sh did not SKIP a pre-existing real greenroom file"
+[ "$(cat "$ch/.claude/skills/greenroom")" = "do not touch" ] || fail "install.sh clobbered a real user file"
+ok "install.sh skips (never clobbers) a real user file at the skill target"
 
-# --- 36. a real (non-dir) file at the script-root path is SKIPped, not fatal (iter-4 codex L) ---
-fh="$T/filehome"
-mkdir -p "$fh/.claude/skills"
-echo "user file" > "$fh/.claude/skills/greenroom"                  # a real file where the script-root dir would go
-out4="$(HOME="$fh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh aborted on a real file at the script-root path"
-echo "$out4" | grep -q "SKIP script-root" || fail "install.sh did not SKIP a real file at the script-root path"
-[ "$(cat "$fh/.claude/skills/greenroom")" = "user file" ] || fail "install.sh clobbered a real file at the script-root path"
-[ -L "$fh/.claude/skills/greenroom-setup" ] || fail "install.sh did not still link the skill after the script-root SKIP"
-ok "a real file at the script-root path is SKIPped and the rest of the install proceeds"
-
-# --- 37. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+# --- 39. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
 "$SCRIPT" new markproj --parent "$T/mark" >/dev/null
 gm="$T/mark/markproj/.greenroom"
@@ -891,7 +928,7 @@ rm -f "$gm"
 [ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
 ok "sync adds .greenroom to a wrapper that lacks it"
 
-# --- 38. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+# --- 40. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
 fhm="$T/markforbid"
 mkdir -p "$fhm"
 mkrepo "$fhm/repo-public"
@@ -903,7 +940,7 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
-# --- 39. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# --- 41. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
 # GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
 # .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
 mkdir -p "$T/nows"
@@ -939,7 +976,7 @@ ok "--workspace forces the workspace file regardless of detection"
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
 
-# --- 40. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+# --- 42. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
 mkdir -p "$T/vscode"
 GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
 vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
