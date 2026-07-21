@@ -248,37 +248,6 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   fi
 fi
 
-# Migration 2: the skill was renamed greenroom-setup -> greenroom. Drop our own
-# stale link so the old name stops resolving. Ownership-checked: a real file or
-# an unrelated symlink the user owns is left alone. A dangling link is removed on
-# the same reasoning link_one uses -- the old clone was deleted or moved, nothing
-# the user actively uses dangles, and leaving it keeps the retired skill name
-# registered forever.
-STALE="$SKILL_DEST/greenroom-setup"
-if points_at_repo "$STALE"; then
-  rm "$STALE"
-  echo "migrated: removed the stale greenroom-setup link (renamed to greenroom)"
-elif stale_dest="$(resolve_link "$STALE")" && is_legacy_setup_skill "$stale_dest"; then
-  # A link into a DIFFERENT greenroom checkout that still exists on disk. Keyed
-  # to $REPO_DIR alone this stayed registered forever after a re-clone -- exactly
-  # what this migration exists to prevent. looks_like_ours is the wrong test here:
-  # it demands the target's name match the LINK's basename, and 0.1.4-0.1.7 linked
-  # this path at <checkout>/skills/setup, whose name is `setup`, not
-  # `greenroom-setup`. Accept either historical name.
-  rm "$STALE"
-  echo "migrated: removed a greenroom-setup link into another checkout at $stale_dest"
-elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
-  rm "$STALE"
-  echo "migrated: removed a dangling greenroom-setup link (its target no longer exists)"
-elif [ -d "$STALE" ] && [ ! -L "$STALE" ] && [ -f "$STALE/SKILL.md" ] \
-     && [ "$(skill_name_of "$STALE/SKILL.md")" = "greenroom-setup" ]; then
-  # A COPIED payload, from `npx skills add ...@greenroom-setup`. Not a link we
-  # made, so not ours to delete -- but left alone the retired name resolves
-  # forever, which is the whole point of this migration.
-  echo "NOTE: $STALE is a copied install of the retired greenroom-setup skill."
-  echo "      Remove it (rm -rf $STALE) so the old name stops resolving."
-fi
-
 # Link each skill under its own name. Skill names carry the greenroom identity
 # (e.g. `greenroom`), so a manual install gets a distinctive /greenroom rather
 # than a generic name that could collide with the user's own skills. (A plugin
@@ -338,7 +307,56 @@ else
   done
 fi
 
-echo "Done. $skill_linked skill(s) → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
+# Migration 2: the skill was renamed greenroom-setup -> greenroom. Drop our own
+# stale link so the old name stops resolving. Ownership-checked: a real file or
+# an unrelated symlink the user owns is left alone. A dangling link is removed on
+# the same reasoning link_one uses -- the old clone was deleted or moved, nothing
+# the user actively uses dangles, and leaving it keeps the retired skill name
+# registered forever.
+#
+# Deliberately AFTER the skill loop. A 0.1.8 user has both artifacts, and if the
+# shim path is blocked the new skill cannot link -- removing the old name first
+# would leave them with no greenroom skill at all, which is the opposite of every
+# "leaving it untouched" promise above.
+STALE="$SKILL_DEST/greenroom-setup"
+if [ -n "$install_failed" ]; then
+  if [ -e "$STALE" ] || [ -L "$STALE" ]; then
+    echo "NOTE: leaving $STALE registered -- the new skill could not be installed."
+    echo "      Resolve the SKIPs above and re-run; this run changed nothing there."
+  fi
+elif points_at_repo "$STALE"; then
+  rm "$STALE"
+  echo "migrated: removed the stale greenroom-setup link (renamed to greenroom)"
+elif stale_dest="$(resolve_link "$STALE")" && is_legacy_setup_skill "$stale_dest"; then
+  # A link into a DIFFERENT greenroom checkout that still exists on disk. Keyed
+  # to $REPO_DIR alone this stayed registered forever after a re-clone -- exactly
+  # what this migration exists to prevent. looks_like_ours is the wrong test here:
+  # it demands the target's name match the LINK's basename, and 0.1.4-0.1.7 linked
+  # this path at <checkout>/skills/setup, whose name is `setup`, not
+  # `greenroom-setup`. Accept either historical name.
+  rm "$STALE"
+  echo "migrated: removed a greenroom-setup link into another checkout at $stale_dest"
+elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
+  rm "$STALE"
+  echo "migrated: removed a dangling greenroom-setup link (its target no longer exists)"
+elif [ -d "$STALE" ] && [ ! -L "$STALE" ] && [ -f "$STALE/SKILL.md" ] \
+     && [ "$(skill_name_of "$STALE/SKILL.md")" = "greenroom-setup" ]; then
+  # A COPIED payload, from `npx skills add ...@greenroom-setup`. Not a link we
+  # made, so not ours to delete -- but left alone the retired name resolves
+  # forever, which is the whole point of this migration.
+  echo "NOTE: $STALE is a copied install of the retired greenroom-setup skill."
+  echo "      Remove it (rm -rf $STALE) so the old name stops resolving."
+fi
+
+# Count the skills already present as a standalone install, or a successful run
+# over one reports "Done. 0 skill(s)" -- the misleading summary this release set
+# out to remove.
+skill_already=$((skill_ok - skill_linked))
+skill_summary="$skill_linked skill(s)"
+if [ "$skill_already" -gt 0 ]; then
+  skill_summary="$skill_summary linked, $skill_already already installed"
+fi
+echo "Done. $skill_summary → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
 
 # A skill we ship did not get installed. The SKIPs above say what to do; exit
 # non-zero so the failure is not buried under a cheerful "Done." line -- a
