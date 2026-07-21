@@ -99,6 +99,10 @@ reaches a stable release.
   — to use time.
 - A checkout holding no `skills/*/SKILL.md` — a partial or corrupt clone — fails
   loudly instead of reporting `Done. 0 skill(s)` and registering the commands.
+- A standalone install already sitting at `~/.claude/skills/greenroom` (from
+  `npx skills add -g`, the install the README leads with) is reported and left
+  alone. It is a real directory, so running `install.sh` on top of it used to
+  fail the run and tell the user to remove a perfectly good copy of greenroom.
 - An install that installs no skill now exits non-zero and prints the remedy,
   instead of reporting `Done. 0 skill(s)` and leaving the user's `/greenroom`
   quietly pointing at an older clone.

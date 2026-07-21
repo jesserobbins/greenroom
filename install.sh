@@ -206,6 +206,8 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
           shim_is_ours=yes
         elif [ -L "$entry" ] && [ ! -e "$entry" ]; then
           shim_is_ours=yes
+        elif edest="$(resolve_link "$entry")" && is_greenroom_checkout "$(dirname "$edest")"; then
+          shim_is_ours=yes                               # a link into ANOTHER live checkout
         else
           shim_has_extras=yes                            # a real dir or a foreign link
         fi
@@ -271,6 +273,7 @@ fi
 # install gives /greenroom:<name>.)
 skill_found=0
 skill_linked=0
+skill_ok=0        # linked by us, OR already present as a standalone install
 for skill_dir in "$REPO_DIR"/skills/*/; do
   [ -f "$skill_dir/SKILL.md" ] || continue          # only dirs that hold a skill
   skill_found=$((skill_found + 1))
@@ -281,15 +284,29 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   # `sync` must not silently take over a user's dangling symlink at that name.
   claim=""
   case "$sname" in greenroom|greenroom-*) claim=claim-dangling ;; esac
+  # A real directory here that declares this very skill is a standalone install
+  # (`npx skills add -g`), not an obstacle. Left to link_one it becomes SKIP ->
+  # exit 1, telling the user to remove a perfectly good install of greenroom.
+  if [ -d "$SKILL_DEST/$sname" ] && [ ! -L "$SKILL_DEST/$sname" ] \
+     && [ -f "$SKILL_DEST/$sname/SKILL.md" ] \
+     && [ "$(skill_name_of "$SKILL_DEST/$sname/SKILL.md")" = "$sname" ]; then
+    echo "NOTE: $SKILL_DEST/$sname is already a standalone install of the $sname skill."
+    echo "      Leaving it alone. Remove it first if you want this clone symlinked instead."
+    skill_ok=$((skill_ok + 1))
+    continue
+  fi
   link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname" "$claim"
-  if [ "$link_result" = "linked" ]; then skill_linked=$((skill_linked + 1)); fi
+  if [ "$link_result" = "linked" ]; then
+    skill_linked=$((skill_linked + 1))
+    skill_ok=$((skill_ok + 1))
+  fi
 done
 
 # A checkout with no skills/*/SKILL.md at all is a partial or corrupt clone, not
 # a successful install of nothing. Counted as a failure alongside a skipped skill,
 # or "0 of 0" would sail through both guards below.
 install_failed=""
-if [ "$skill_found" -eq 0 ] || [ "$skill_linked" -lt "$skill_found" ]; then
+if [ "$skill_found" -eq 0 ] || [ "$skill_ok" -lt "$skill_found" ]; then
   install_failed=yes
 fi
 
@@ -318,7 +335,7 @@ if [ -n "$install_failed" ]; then
   if [ "$skill_found" -eq 0 ]; then
     echo "install.sh found no skills under $REPO_DIR/skills/ -- is this a complete clone?" >&2
   else
-    echo "install.sh installed $skill_linked of $skill_found skill(s). See the SKIP notes above." >&2
+    echo "install.sh installed $skill_ok of $skill_found skill(s). See the SKIP notes above." >&2
   fi
   exit 1
 fi
