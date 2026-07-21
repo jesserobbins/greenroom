@@ -1566,19 +1566,33 @@ ok "a working command link of ours is reported when the skill it invokes is abse
 #          working tree. A stray __pycache__/ or editor backup in the developer's
 #          own clone must not become something a user's standalone install has to
 #          have -- that fails a working copy and tells them to remove it. ---
-junk="$REPO_ROOT/skills/greenroom/scripts/__pycache__"
-mkdir -p "$junk" && : > "$junk/greenroom.cpython-99.pyc"
+# This block is the only one that writes into the REAL working tree, so the
+# cleanup is armed in the trap before the artifact exists -- a `fail` below must
+# not leave a __pycache__ behind in the user's repo for later blocks (and later
+# runs) to trip over.
+JUNK="$REPO_ROOT/skills/greenroom/scripts/__pycache__"
+trap 'rm -rf "$T" "$JUNK"' EXIT
+mkdir -p "$JUNK" && : > "$JUNK/greenroom.cpython-99.pyc"
 sth="$T/strayjunkhome"
-mkdir -p "$sth/.claude/skills"
-git -C "$REPO_ROOT" archive HEAD skills/greenroom 2>/dev/null | tar -x -C "$sth/.claude/skills" 2>/dev/null \
-  || cp -R "$REPO_ROOT/skills/greenroom" "$sth/.claude/skills/greenroom"
-mv "$sth/.claude/skills/skills/greenroom" "$sth/.claude/skills/greenroom" 2>/dev/null || true
-rmdir "$sth/.claude/skills/skills" 2>/dev/null || true
+mkdir -p "$sth/.claude/skills/greenroom"
+# Built from the same source install.sh reads -- `git ls-files`, i.e. the INDEX.
+# `git archive HEAD` would omit a file that is staged but not yet committed, which
+# install.sh would still require, and the test would fail blaming the __pycache__.
+( cd "$REPO_ROOT/skills/greenroom" \
+  && git ls-files -z 2>/dev/null | tar -cf - --null -T - 2>/dev/null ) \
+  | tar -xf - -C "$sth/.claude/skills/greenroom" 2>/dev/null || true
+if [ ! -f "$sth/.claude/skills/greenroom/SKILL.md" ]; then
+  echo "NOTE: git ls-files unavailable -- copying the payload wholesale"
+  rm -rf "$sth/.claude/skills/greenroom"
+  cp -R "$REPO_ROOT/skills/greenroom" "$sth/.claude/skills/greenroom"
+fi
 rm -rf "$sth/.claude/skills/greenroom/scripts/__pycache__"      # a clean install has none
-out44="$(HOME="$sth" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh failed over a stray build artifact: $out44"
-rm -rf "$junk"
+out44="$(HOME="$sth" bash "$REPO_ROOT/install.sh" 2>&1)" && rc44=0 || rc44=$?
+[ "$rc44" -eq 0 ] || fail "install.sh failed over a stray build artifact: $out44"
 echo "$out44" | grep -q "already a standalone install" \
   || fail "a stray __pycache__ in the clone made a good standalone install fail: $out44"
+rm -rf "$JUNK"
+trap 'rm -rf "$T"' EXIT
 ok "untracked junk in the installer's clone is not required of the user's install"
 
 # --- 74. a payload with scripts/ but no templates/ is not a working install either:
