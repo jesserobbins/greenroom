@@ -870,12 +870,19 @@ ok "skill content relies on no plugin-only path variable"
 
 # --- 32. commands stay hollow. They are Claude-Code-only sugar; `npx skills` never
 #         reads commands/. Any logic here is logic a skills.sh user cannot reach. ---
+skill_name="$(sed -n 's/^name:[[:space:]]*//p' "$SKILL_MD" | head -1 | tr -d '[:space:]')"
 for cmd in "$REPO_ROOT"/commands/*.md; do
   lines="$(wc -l < "$cmd" | tr -d ' ')"
   [ "$lines" -le 15 ] || fail "$(basename "$cmd") is $lines lines (hollow-command budget: 15)"
   ! grep -q '```' "$cmd" || fail "$(basename "$cmd") contains a code block (logic belongs in the skill)"
+  # Now that the commands are hollow, the skill's NAME is the only thing linking a
+  # slash command to any behaviour. This release renamed the skill twice; a third
+  # rename would leave /new, /add and /sync invoking nothing, and every other
+  # assertion here would still pass. The failure would surface only at use time.
+  grep -q "\`$skill_name\` skill" "$cmd" \
+    || fail "$(basename "$cmd") does not invoke the \`$skill_name\` skill by name (renamed without updating it?)"
 done
-ok "slash commands are hollow triggers with no embedded logic"
+ok "slash commands are hollow triggers that name the skill they invoke"
 
 # --- 33. manual install links the skill, and the script + templates come with it ---
 mh="$T/manualhome"
@@ -1075,9 +1082,10 @@ ok "a dangling greenroom-setup link is migrated away like any other stale link"
 #          forever -- the exact failure this migration exists to prevent. ---
 osh="$T/oldsetuphome"
 old_ck="$T/oldsetupclone"
-mkdir -p "$old_ck/skills/greenroom-setup" "$osh/.claude/skills"
+mkdir -p "$old_ck/skills/greenroom-setup" "$old_ck/.claude-plugin" "$osh/.claude/skills"
 printf -- '---\nname: greenroom-setup\ndescription: the retired name\n---\n' \
   > "$old_ck/skills/greenroom-setup/SKILL.md"
+cp "$REPO_ROOT/.claude-plugin/plugin.json" "$old_ck/.claude-plugin/plugin.json"   # a real checkout has one
 ln -s "$old_ck/skills/greenroom-setup" "$osh/.claude/skills/greenroom-setup"
 HOME="$osh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh errored on a foreign greenroom-setup link"
 [ ! -L "$osh/.claude/skills/greenroom-setup" ] \
@@ -1392,6 +1400,14 @@ while IFS= read -r v; do
   grep -q "^\[$v\]:" "$REPO_ROOT/CHANGELOG.md" || missing="$missing $v"
 done < <(grep -o '^## \[[0-9][^]]*\]' "$REPO_ROOT/CHANGELOG.md" | sed 's/^## \[//; s/\]$//')
 [ -z "$missing" ] || fail "changelog versions with no reference-link definition:$missing"
-ok "every released changelog heading has its link definition"
+# The shipped version must match the newest heading. The resolver's plugin-cache
+# tier now sorts on the cached VERSION directory, so a plugin.json drifting behind
+# the changelog quietly changes which cached copy wins -- invisible in a diff.
+newest_heading="$(grep -o '^## \[[0-9][^]]*\]' "$REPO_ROOT/CHANGELOG.md" | head -1 | sed 's/^## \[//; s/\]$//')"
+manifest_version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+  "$REPO_ROOT/.claude-plugin/plugin.json" | head -1)"
+[ "$newest_heading" = "$manifest_version" ] \
+  || fail "plugin.json version is $manifest_version but the newest changelog heading is $newest_heading"
+ok "every released changelog heading has its link definition, and matches plugin.json"
 
 echo "all $pass checks passed"

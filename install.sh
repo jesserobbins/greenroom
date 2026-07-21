@@ -59,24 +59,43 @@ points_at_repo_root() {
 # elsewhere and re-installing is a normal upgrade path; keying ownership to
 # $REPO_DIR alone made it a hard failure, since the old clone is still on disk
 # and so the link is neither ours nor dangling.
+#
+# BOTH branches demand the same evidence: the entry sits where a greenroom
+# checkout would put it, AND that checkout's plugin manifest names greenroom. The
+# manifest is the only real proof. Matching a SKILL.md's `name:` alone would mean
+# that once greenroom ships a `skills/notes/`, a user's own ~/.claude/skills/notes
+# link -- pointing at their `name: notes` skill -- gets seized and repointed.
 looks_like_ours() {
-  local dest="$1" name manifest
+  local dest="$1" name declared
   name="$(basename "$2")"
-  if [ -d "$dest" ]; then                            # a skill dir declaring itself
-    if [ -f "$dest/SKILL.md" ] && grep -q "^name:[[:space:]]*${name}[[:space:]]*\$" "$dest/SKILL.md"; then
-      return 0
-    fi
-  elif [ -f "$dest" ]; then                          # a command file from a greenroom checkout
+  if [ -d "$dest" ]; then                            # <checkout>/skills/<name>/
+    [ -f "$dest/SKILL.md" ] || return 1
+    # exact compare, not an interpolated regex: a name holding `.` or `*` would
+    # otherwise match more loosely than intended
+    declared="$(skill_name_of "$dest/SKILL.md")"
+    [ "$declared" = "$name" ] || return 1
+    is_greenroom_checkout "$(dirname "$(dirname "$dest")")" || return 1
+    return 0
+  elif [ -f "$dest" ]; then                          # <checkout>/commands/<name>
     case "$dest" in
       */commands/"$name")
-        manifest="$(dirname "$(dirname "$dest")")/.claude-plugin/plugin.json"
-        if [ -f "$manifest" ] && grep -q '"name"[[:space:]]*:[[:space:]]*"greenroom"' "$manifest"; then
-          return 0
-        fi
+        is_greenroom_checkout "$(dirname "$(dirname "$dest")")" || return 1
+        return 0
         ;;
     esac
   fi
   return 1
+}
+
+# skill_name_of <SKILL.md>: the declared `name:` value, whitespace stripped.
+skill_name_of() {
+  sed -n 's/^name:[[:space:]]*//p' "$1" | head -1 | tr -d '[:space:]'
+}
+
+# is_greenroom_checkout <dir>: true if <dir> is the root of a greenroom checkout.
+is_greenroom_checkout() {
+  [ -f "$1/.claude-plugin/plugin.json" ] \
+    && grep -q '"name"[[:space:]]*:[[:space:]]*"greenroom"' "$1/.claude-plugin/plugin.json"
 }
 
 # link_one <target> <link-path> <label> [claim-dangling]: refresh our own
@@ -141,8 +160,7 @@ if [ -L "$OLD_SHIM" ]; then
   if points_at_repo_root "$OLD_SHIM"; then
     rm "$OLD_SHIM"
     echo "migrated: removed the old greenroom root symlink at $OLD_SHIM"
-  elif root_dest="$(resolve_link "$OLD_SHIM")" && [ -f "$root_dest/.claude-plugin/plugin.json" ] \
-       && grep -q '"name"[[:space:]]*:[[:space:]]*"greenroom"' "$root_dest/.claude-plugin/plugin.json"; then
+  elif root_dest="$(resolve_link "$OLD_SHIM")" && is_greenroom_checkout "$root_dest"; then
     rm "$OLD_SHIM"
     echo "migrated: removed an old greenroom root symlink into another checkout at $root_dest"
   fi
@@ -224,7 +242,7 @@ elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
   rm "$STALE"
   echo "migrated: removed a dangling greenroom-setup link (its target no longer exists)"
 elif [ -d "$STALE" ] && [ ! -L "$STALE" ] && [ -f "$STALE/SKILL.md" ] \
-     && grep -q "^name:[[:space:]]*greenroom-setup[[:space:]]*\$" "$STALE/SKILL.md"; then
+     && [ "$(skill_name_of "$STALE/SKILL.md")" = "greenroom-setup" ]; then
   # A COPIED payload, from `npx skills add ...@greenroom-setup`. Not a link we
   # made, so not ours to delete -- but left alone the retired name resolves
   # forever, which is the whole point of this migration.
