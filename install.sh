@@ -81,21 +81,32 @@ looks_like_ours() {
 # link <target> <link-path> <label>: refresh our own symlinks, never clobber
 # anything the user owns -- neither a real file nor a symlink of their own.
 # Sets `link_result` to "linked" or "skip".
+# link_one <target> <link-path> <label> [claim-dangling]: pass a non-empty fourth
+# argument only for a path whose NAME is ours (`skills/greenroom`). A dangling
+# link there is almost certainly our own after the clone moved. The command links
+# are generic names -- new.md, add.md, sync.md -- that a user may well have bound
+# to their own repo, and a target on an unmounted volume or a moved clone reads
+# as dangling too; those we leave alone.
 link_one() {
-  local target="$1" link="$2" label="$3" dest
+  local target="$1" link="$2" label="$3" claim_dangling="${4:-}" dest
   if [ -L "$link" ]; then
     if points_at_repo "$link"; then
       rm "$link"                                   # our own link: refresh it
     elif dest="$(resolve_link "$link")" && looks_like_ours "$dest" "$link"; then
       rm "$link"                                   # another greenroom checkout: repoint
       echo "repointed $label from another greenroom checkout at $dest"
-    elif [ ! -e "$link" ]; then
-      # Dangling. Our own link looks exactly like this after the clone is moved
-      # or renamed, and ownership can no longer be proven -- but nobody is served
-      # by a dead link sitting at our path, and a link the user actively uses is
-      # not dangling. Replace it, and say that is what happened.
+    elif [ ! -e "$link" ] && [ -n "$claim_dangling" ]; then
+      # Our own link looks exactly like this after the clone is moved or renamed,
+      # and ownership can no longer be proven -- but nobody is served by a dead
+      # link at a path named for us, and a link the user actively uses is not
+      # dangling. Replace it, and say that is what happened.
       rm "$link"
       echo "replaced a dangling symlink at $link (its target no longer exists)"
+    elif [ ! -e "$link" ]; then
+      echo "SKIP $label: $link is a dangling symlink we cannot prove is ours (leaving it untouched)"
+      echo "     to install here instead: rm $link && re-run install.sh"
+      link_result="skip"
+      return
     else
       echo "SKIP $label: $link is a symlink into somewhere else (leaving it untouched)"
       echo "     to install here instead: rm $link && re-run install.sh"
@@ -157,6 +168,12 @@ STALE="$SKILL_DEST/greenroom-setup"
 if points_at_repo "$STALE"; then
   rm "$STALE"
   echo "migrated: removed the stale greenroom-setup link (renamed to greenroom)"
+elif stale_dest="$(resolve_link "$STALE")" && looks_like_ours "$stale_dest" "$STALE"; then
+  # A link into a DIFFERENT greenroom checkout that still exists on disk. Keyed
+  # to $REPO_DIR alone this stayed registered forever after a re-clone -- exactly
+  # what this migration exists to prevent.
+  rm "$STALE"
+  echo "migrated: removed a greenroom-setup link into another checkout at $stale_dest"
 elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
   rm "$STALE"
   echo "migrated: removed a dangling greenroom-setup link (its target no longer exists)"
@@ -173,7 +190,7 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   skill_found=$((skill_found + 1))
   sname="$(basename "$skill_dir")"
   link_result=""
-  link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname"
+  link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname" claim-dangling
   if [ "$link_result" = "linked" ]; then skill_linked=$((skill_linked + 1)); fi
 done
 

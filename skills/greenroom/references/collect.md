@@ -9,9 +9,10 @@ be a git repo); the sibling private dir is auto-detected. Pass
 `--public`/`--private` to run from elsewhere.
 
 ```bash
+# resolve $greenroom per SKILL.md BEFORE this cd, then:
 cd <wrapper>/<project>-public
-<skill-dir>/scripts/greenroom.py collect            # dry-run, prints the plan
-<skill-dir>/scripts/greenroom.py collect --apply    # copy files into <project>-private/
+python3 "$greenroom" collect            # dry-run, prints the plan
+python3 "$greenroom" collect --apply    # copy files into <project>-private/
 ```
 
 **Copy-only.** Files are read from git at the chosen commit SHA and written into

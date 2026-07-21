@@ -59,11 +59,17 @@ reaches a stable release.
 - The old script-root shim is dismantled by removing the two links we created,
   not by `rm -rf` on the whole directory. Anything else the user left in there
   survives, and the migration says so instead of deleting silently.
-- A dangling symlink at the skill path is replaced rather than skipped, and a
-  dangling `greenroom-setup` link is migrated away on the same reasoning. Our own
-  links become dangling the moment the clone is moved, skipping them made a
-  re-run from the relocated clone silently install nothing, and a stale one left
-  the retired skill name registered forever.
+- A dangling symlink at the *skill* path is replaced rather than skipped, and a
+  `greenroom-setup` link is migrated away whether it dangles or points into
+  another live checkout. Our own links become dangling the moment the clone is
+  moved, skipping them made a re-run from the relocated clone silently install
+  nothing, and a stale one left the retired skill name registered forever. The
+  command names (`new.md`, `add.md`, `sync.md`) are generic enough that a user
+  may have bound them to their own repo, so a dangling link there — an unmounted
+  volume, a moved clone — is left alone and reported.
+- `install.sh` is tracked executable. The README's manual-install block says
+  `./install.sh`, which failed with "permission denied"; every test invoked it as
+  `bash install.sh`, so nothing caught it.
 - Re-installing from a second clone repoints the links instead of hard-failing.
   Ownership was proven only against the current `$REPO_DIR`, so a link from an
   older clone that still existed on disk was neither ours nor dangling: the run
@@ -74,9 +80,11 @@ reaches a stable release.
   quietly pointing at an older clone.
 - SKILL.md documents how to *find* `scripts/greenroom.py` — a resolver covering
   the plugin, `npx skills add`, and manual-clone layouts — rather than naming an
-  absolute path the agent had no way to derive. It covers the project-local
-  `npx skills add` layout that the README leads with, the plugin-cache tier is
-  version-sorted so the newest cached copy wins over the lexically first, the
+  absolute path the agent had no way to derive. It walks up from `$PWD` for the
+  project-local `npx skills add` layout the README leads with, so it still
+  resolves once the agent has `cd`'d into a repo; the plugin-cache tier sorts on
+  the version directory alone, so neither a lexically-first version nor a second
+  cached marketplace owner can outrank the newest; the
   script is invoked through `python3` so a lost exec bit is not fatal, and an
   unresolved path fails loudly instead of running `python3 ""`. A smoke test
   extracts the snippet from SKILL.md and runs it against each install shape.

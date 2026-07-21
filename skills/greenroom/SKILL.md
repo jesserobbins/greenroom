@@ -39,11 +39,17 @@ The skill's directory differs per install shape (plugin, `npx skills add`,
 manual clone), so resolve it first and reuse `$greenroom` for every call:
 
 ```bash
+# project-local install: walk up from $PWD, so it resolves from a subdirectory too
+proj=""; d="$PWD"
+while [ -n "$d" ] && [ "$d" != "/" ]; do
+  [ -f "$d/.claude/skills/greenroom/scripts/greenroom.py" ] && proj="$d/.claude/skills/greenroom" && break
+  d="$(dirname "$d")"
+done
+# newest cached plugin version, keyed on the VERSION dir, not the whole path
+cache="$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom 2>/dev/null \
+         | awk -F/ '{print $(NF-2)"\t"$0}' | sort -V | tail -1 | cut -f2-)"
 greenroom=""
-for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" \
-         "$PWD/.claude/skills/greenroom" \
-         "$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom \
-            2>/dev/null | sort -V | tail -1)" \
+for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" "$proj" "$cache" \
          "$HOME/.claude/skills/greenroom"; do
   if [ -n "$c" ] && [ -f "$c/scripts/greenroom.py" ]; then
     greenroom="$c/scripts/greenroom.py"; break
@@ -53,13 +59,17 @@ done
 python3 "$greenroom" <subcommand> [args]
 ```
 
+Resolve `$greenroom` **before** any `cd` into the project, and reuse it — several
+subcommands want you in a specific directory, and the project-local tier is
+relative to where you start.
+
 `npx skills add` without `-g` installs into the *project*, which is why the
-`$PWD` tier comes first after the env var. The plugin cache outranks
+walked-up project tier comes first after the env var. The plugin cache outranks
 `~/.claude/skills` because `$CLAUDE_PLUGIN_ROOT` is not exported into Bash-tool
 shells, so the cache *is* the plugin path — a leftover manual clone must not
-shadow it. The cache tier is version-sorted so the newest cached plugin wins, and
-the script runs through `python3` so a payload that lost its exec bit in transit
-still works.
+shadow it. That tier sorts on the version directory alone, so a second cached
+marketplace owner cannot outrank a newer version. The script runs through
+`python3` so a payload that lost its exec bit in transit still works.
 
 After a `new` or `retrofit` run, surface any plugin-config warning and any
 stale-cwd note **verbatim** — those are the only steps the user must act on by
