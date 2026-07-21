@@ -35,6 +35,28 @@ resolve_link() {
   printf '%s/%s\n' "${dir%/}" "$(basename "$raw")"   # %/ so a target under / is not //name
 }
 
+# normalize_target_dir <symlink>: the directory part of a symlink's target, made
+# absolute and canonical TEXTUALLY -- the target may not exist, so resolve_link's
+# `cd` cannot be used. Two links written with differently-spelled but identical
+# targets (absolute vs relative, trailing slash, a `..` hop) must compare equal, or
+# a shim that really is ours is refused and the install aborts.
+normalize_target_dir() {
+  local raw dir out part
+  raw="$(readlink "$1")" || return 1
+  case "$raw" in /*) ;; *) raw="$(dirname "$1")/$raw" ;; esac
+  dir="$(dirname "$raw")"
+  out=""
+  local IFS=/
+  for part in $dir; do
+    case "$part" in
+      ""|.) ;;
+      ..) out="${out%/*}" ;;
+      *) out="$out/$part" ;;
+    esac
+  done
+  printf '%s\n' "${out:-/}"
+}
+
 # points_at_repo <path>: true if <path> is a symlink resolving into this repo.
 # Used to confirm a link is OURS before removing or refreshing it; a symlink the
 # user placed at the same path is left alone.
@@ -222,7 +244,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
           # name a user would pick and is indistinguishable at this point. Recorded
           # as a candidate; the pair check below decides.
           shim_dangle_n=$((shim_dangle_n + 1))
-          shim_dangle_parents+=("$(dirname "$(readlink "$entry")")")
+          shim_dangle_parents+=("$(normalize_target_dir "$entry")")
           shim_dangling="$shim_dangling $ename -> $(readlink "$entry")"
         elif edest="$(resolve_link "$entry")" && is_greenroom_checkout "$(dirname "$edest")"; then
           shim_is_ours=yes                               # a link into ANOTHER live checkout
@@ -326,6 +348,23 @@ cmd_linked=0
 cmd_skipped=0
 if [ -n "$install_failed" ]; then
   echo "not linking the commands: they only invoke the skill, which did not install"
+  # Withholding new links is only half the invariant. A PREVIOUS successful run may
+  # have left ours in place, and if its clone is gone they are registered and
+  # broken -- the use-time failure this guard exists to prevent, just arrived by a
+  # different route. Report them; do not remove, since the user may be mid-repair.
+  for cmd in "$REPO_DIR"/commands/*.md; do
+    [ -f "$cmd" ] || continue
+    stale_cmd="$CMD_DEST/$(basename "$cmd")"
+    [ -L "$stale_cmd" ] || continue
+    if points_at_repo "$stale_cmd" && [ -e "$stale_cmd" ]; then
+      continue                                     # ours and still working
+    fi
+    if cdest="$(resolve_link "$stale_cmd")" && looks_like_ours "$cdest" "$stale_cmd"; then
+      continue                                     # another checkout's, still working
+    fi
+    echo "     WARNING: $stale_cmd is registered but broken (target gone)."
+    echo "              /$(basename "$cmd" .md) will fail until this run succeeds."
+  done
 else
   for cmd in "$REPO_DIR"/commands/*.md; do
     [ -f "$cmd" ] || continue                      # no commands dir / no matches

@@ -10,8 +10,8 @@ be a git repo); the sibling private dir is auto-detected. Pass
 
 ```bash
 # $greenroom does not survive between shell calls. Paste SKILL.md's resolver block
-# at the top of THIS command, before the cd -- one shell, in this order:
-<resolver block from SKILL.md>
+# verbatim at the top of THIS command, before the cd -- one shell, in this order:
+#   <SKILL.md resolver block, ending at the `[ -n "$greenroom" ] || ...` guard>
 cd <wrapper>/<project>-public
 python3 "$greenroom" collect            # dry-run, prints the plan
 ```

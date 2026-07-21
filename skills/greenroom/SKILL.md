@@ -74,13 +74,18 @@ for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" "$proj" "$cache"
   fi
 done
 [ -n "$greenroom" ] || { echo "greenroom.py not found; see the fallback below" >&2; exit 1; }
-# ...then, in this SAME command: any cd, then the invocation.
+```
+
+Copy that block verbatim, then append your own two lines to the same command —
+the `cd` (if the subcommand needs one) and the invocation:
+
+```
+cd <dir-the-subcommand-wants>
 python3 "$greenroom" <subcommand> [args]
 ```
 
-The resolver must run **before** any `cd` — the project-local tier is relative to
-where you start, and several subcommands want you in a specific directory. Both
-steps in one shell, in that order.
+Order matters: the resolver runs **before** any `cd`, because the project-local
+tier is relative to where you start.
 
 `npx skills add` without `-g` installs into the *project*, which is why the
 walked-up project tier comes first after the env var — counting only your own
