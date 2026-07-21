@@ -87,9 +87,17 @@ looks_like_ours() {
   return 1
 }
 
-# skill_name_of <SKILL.md>: the declared `name:` value, whitespace stripped.
+# skill_name_of <SKILL.md>: the declared `name:` value, whitespace stripped, read
+# ONLY from the leading `---` frontmatter. Scanning the whole file would let a
+# `name:` line in the body -- a YAML example, a table row -- masquerade as the
+# declared name, and three ownership decisions rest on this. Fails closed: no
+# frontmatter, no name.
 skill_name_of() {
-  sed -n 's/^name:[[:space:]]*//p' "$1" | head -1 | tr -d '[:space:]'
+  awk '
+    NR == 1 { if ($0 != "---") exit; next }
+    /^---[[:space:]]*$/ { exit }
+    /^name:/ { sub(/^name:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }
+  ' "$1"
 }
 
 # is_greenroom_skill_dir <dir>: true if <dir> is any skill directory belonging to a
@@ -194,7 +202,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   shim_has_extras=""
   shim_dangling=""
   shim_dangle_n=0
-  shim_dangle_parents=""
+  shim_dangle_parents=()
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
     ename="$(basename "$entry")"
@@ -214,7 +222,7 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
           # name a user would pick and is indistinguishable at this point. Recorded
           # as a candidate; the pair check below decides.
           shim_dangle_n=$((shim_dangle_n + 1))
-          shim_dangle_parents="$shim_dangle_parents $(dirname "$(readlink "$entry")")"
+          shim_dangle_parents+=("$(dirname "$(readlink "$entry")")")
           shim_dangling="$shim_dangling $ename -> $(readlink "$entry")"
         elif edest="$(resolve_link "$entry")" && is_greenroom_checkout "$(dirname "$edest")"; then
           shim_is_ours=yes                               # a link into ANOTHER live checkout
@@ -228,8 +236,10 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   # The old installer always made BOTH links, side by side, pointing into the same
   # clone. That pair is the signature; a lone dangling `scripts` is not, however it
   # is named. Only a matched pair sharing one parent is claimed on inference.
+  # Compared as array elements, not a split string: a clone under "~/My Projects"
+  # would otherwise look like four parents instead of two and be refused.
   if [ "$shim_dangle_n" -eq 2 ] \
-     && [ "$(printf '%s\n' $shim_dangle_parents | sort -u | wc -l | tr -d ' ')" = "1" ]; then
+     && [ "${shim_dangle_parents[0]}" = "${shim_dangle_parents[1]}" ]; then
     shim_is_ours=yes
   elif [ "$shim_dangle_n" -gt 0 ]; then
     shim_has_extras=yes                                  # unpaired: not ours to judge
