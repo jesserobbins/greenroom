@@ -10,11 +10,11 @@ reaches a stable release.
 ## [0.2.0-alpha] - 2026-07-21
 
 ### Added
-- A GitHub Actions workflow runs `tests/smoke.sh` on every push and PR, on Linux
-  and macOS, with PyYAML installed so the frontmatter check takes the full parse
-  rather than its degraded name-only fallback. The suite is the only guard on the
-  distribution shape; leaving it to local runs left every guarantee resting on a
-  developer remembering.
+- A GitHub Actions workflow runs `tests/smoke.sh` on every pull request and on
+  pushes to `main`, on Linux and macOS, with PyYAML installed so the frontmatter
+  check takes the full parse rather than its degraded name-only fallback. The
+  suite is the only guard on the distribution shape; leaving it to local runs
+  left every guarantee resting on a developer remembering.
 - greenroom installs as a standalone skill on any agent:
   `npx skills add jesserobbins/greenroom`. The `skills/greenroom/` directory is
   now self-sufficient — it carries its own `scripts/` and `templates/` — because

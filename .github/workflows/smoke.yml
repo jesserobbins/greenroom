@@ -16,9 +16,18 @@ on:
 permissions:
   contents: read
 
+# A superseded PR push should not keep burning both matrix legs.
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smoke:
     runs-on: ${{ matrix.os }}
+    # The suite scaffolds dozens of throwaway repos and drives ~15 install.sh runs,
+    # several over deliberately broken symlinks. A hang must not burn the default
+    # 360-minute budget per leg.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

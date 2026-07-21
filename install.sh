@@ -148,6 +148,20 @@ is_greenroom_skill_dir() {
   is_greenroom_checkout "$(dirname "$(dirname "$1")")"
 }
 
+# OS droppings that are never "a file the user left behind".
+SHIM_NOISE=".DS_Store Thumbs.db .localized"
+
+# purge_shim_noise <dir>: remove the OS droppings named in $SHIM_NOISE from <dir>.
+# Guarded on being a file or a link, because `rm -f` on a DIRECTORY returns
+# non-zero and under set -e would abort mid-migration with no message -- and every
+# other failure in this script is a SKIP with a printed remedy.
+purge_shim_noise() {
+  local n
+  for n in $SHIM_NOISE; do
+    if [ -f "$1/$n" ] || [ -L "$1/$n" ]; then rm -f "$1/$n"; fi
+  done
+}
+
 # is_greenroom_checkout <dir>: true if <dir> is the root of a greenroom checkout.
 is_greenroom_checkout() {
   [ -f "$1/.claude-plugin/plugin.json" ] \
@@ -233,12 +247,12 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   # OS noise is not the user's -- a Finder-created .DS_Store is invisible to `ls`,
   # and counting it as a file someone left behind would fail the whole install
   # over something nobody put there. Named once, and driven from that one list.
-  SHIM_NOISE=".DS_Store Thumbs.db .localized"
   shim_is_ours=""
   shim_has_extras=""
   shim_dangling=""
   shim_dangle_n=0
   shim_dangle_parents=()
+  shim_rmdir_failed=""
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
     ename="$(basename "$entry")"
@@ -289,33 +303,37 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
     # Empty, or nothing but OS noise -- a partially cleaned or interrupted prior
     # install. Nothing to weigh, and leaving it would block the skill link and
     # fail the run over a file the user cannot see.
-    # Guarded: `rm -f` on a DIRECTORY returns non-zero, and under set -e that would
-    # abort mid-migration with no message -- the one path here that could die
-    # silently, where every other failure is a SKIP with a printed remedy.
-    for n in $SHIM_NOISE; do
-      if [ -f "$OLD_SHIM/$n" ] || [ -L "$OLD_SHIM/$n" ]; then rm -f "$OLD_SHIM/$n"; fi
-    done
-    rmdir "$OLD_SHIM"
-    echo "migrated: removed an empty or noise-only $OLD_SHIM"
+    purge_shim_noise "$OLD_SHIM"
+    if rmdir "$OLD_SHIM" 2>/dev/null; then
+      echo "migrated: removed an empty or noise-only $OLD_SHIM"
+    else
+      shim_rmdir_failed=yes
+    fi
   elif [ -n "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
     rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates"
-    # Guarded: `rm -f` on a DIRECTORY returns non-zero, and under set -e that would
-    # abort mid-migration with no message -- the one path here that could die
-    # silently, where every other failure is a SKIP with a printed remedy.
-    for n in $SHIM_NOISE; do
-      if [ -f "$OLD_SHIM/$n" ] || [ -L "$OLD_SHIM/$n" ]; then rm -f "$OLD_SHIM/$n"; fi
-    done
-    rmdir "$OLD_SHIM"
-    echo "migrated: removed the old script-root shim at $OLD_SHIM"
-    # Name what was dropped: a dangling link is removed on inference, not proof,
-    # so the user should be able to see exactly what went.
-    if [ -n "$shim_dangling" ]; then echo "     (dead links removed:$shim_dangling)"; fi
+    purge_shim_noise "$OLD_SHIM"
+    if rmdir "$OLD_SHIM" 2>/dev/null; then
+      echo "migrated: removed the old script-root shim at $OLD_SHIM"
+      # Name what was dropped: a dangling link is removed on inference, not proof,
+      # so the user should be able to see exactly what went.
+      if [ -n "$shim_dangling" ]; then echo "     (dead links removed:$shim_dangling)"; fi
+    else
+      shim_rmdir_failed=yes
+    fi
   elif [ -n "$shim_is_ours" ]; then
     echo "SKIP migration: $OLD_SHIM holds files we did not create (leaving it untouched)"
     echo "     the skill cannot be linked over a real directory -- move what you want to keep"
     echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
   else
     echo "SKIP migration: $OLD_SHIM is a directory we do not recognize (leaving it untouched)"
+    echo "     the skill cannot be linked over a real directory -- move what you want to keep"
+    echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
+  fi
+  # rmdir refused: something we did not classify is still in there (a noise NAME
+  # that is really a directory, say). Report it like every other failure rather
+  # than letting set -e kill the run before any remedy is printed.
+  if [ -n "$shim_rmdir_failed" ]; then
+    echo "SKIP migration: could not empty $OLD_SHIM (leaving it untouched)"
     echo "     the skill cannot be linked over a real directory -- move what you want to keep"
     echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
   fi
