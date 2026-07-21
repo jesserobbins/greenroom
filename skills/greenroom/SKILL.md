@@ -97,10 +97,10 @@ stale-cwd note **verbatim** — those are the only steps the user must act on by
 hand. `references/operations.md` has the rest.
 
 Every tier above is a Claude Code path. The skills CLI supports many other
-agents, and their install roots differ — **on a non-Claude agent expect the loop
-to miss**, which is not an error. If it leaves `$greenroom` empty, locate
-`scripts/greenroom.py` under the directory this file was read from and use that;
-it always ships beside this file.
+agents, and their install roots differ — **on a non-Claude agent expect the block
+to miss**, which is not a bug in your invocation. When it exits with
+`greenroom.py not found`, locate `scripts/greenroom.py` under the directory this
+file was read from and call that directly; it always ships beside this file.
 
 Pass the path argument explicitly, or run from the directory noted in the last
 column below. Pass `--help` (or `<subcommand> --help`) for the full flag list.

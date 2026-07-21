@@ -193,6 +193,8 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   shim_is_ours=""
   shim_has_extras=""
   shim_dangling=""
+  shim_dangle_n=0
+  shim_dangle_parents=""
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
     ename="$(basename "$entry")"
@@ -207,11 +209,12 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
           shim_is_ours=yes
         elif [ -L "$entry" ] && [ ! -e "$entry" ] \
              && [ "$(basename "$(readlink "$entry")")" = "$ename" ]; then
-          # Dangling. Ours pointed at <clone>/scripts or <clone>/templates, so the
-          # target's basename matches the entry name. A user's own link on an
-          # unmounted volume (-> /Volumes/ext/my-scripts) does not, and is left to
-          # the extras branch rather than silently deleted.
-          shim_is_ours=yes
+          # Dangling, and shaped like ours. Deliberately NOT enough on its own:
+          # `-> /Volumes/ext/scripts` on an unmounted volume is the most natural
+          # name a user would pick and is indistinguishable at this point. Recorded
+          # as a candidate; the pair check below decides.
+          shim_dangle_n=$((shim_dangle_n + 1))
+          shim_dangle_parents="$shim_dangle_parents $(dirname "$(readlink "$entry")")"
           shim_dangling="$shim_dangling $ename -> $(readlink "$entry")"
         elif edest="$(resolve_link "$entry")" && is_greenroom_checkout "$(dirname "$edest")"; then
           shim_is_ours=yes                               # a link into ANOTHER live checkout
@@ -222,6 +225,16 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       *) shim_has_extras=yes ;;
     esac
   done
+  # The old installer always made BOTH links, side by side, pointing into the same
+  # clone. That pair is the signature; a lone dangling `scripts` is not, however it
+  # is named. Only a matched pair sharing one parent is claimed on inference.
+  if [ "$shim_dangle_n" -eq 2 ] \
+     && [ "$(printf '%s\n' $shim_dangle_parents | sort -u | wc -l | tr -d ' ')" = "1" ]; then
+    shim_is_ours=yes
+  elif [ "$shim_dangle_n" -gt 0 ]; then
+    shim_has_extras=yes                                  # unpaired: not ours to judge
+    shim_dangling=""
+  fi
   if [ -z "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
     # Empty, or nothing but OS noise -- a partially cleaned or interrupted prior
     # install. Nothing to weigh, and leaving it would block the skill link and
@@ -268,9 +281,14 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   # A real directory here that declares this very skill is a standalone install
   # (`npx skills add -g`), not an obstacle. Left to link_one it becomes SKIP ->
   # exit 1, telling the user to remove a perfectly good install of greenroom.
+  # The payload check is not decoration: a name match alone would also accept a
+  # stale pre-0.2 copy with no scripts/ inside, and we would report success while
+  # the hollow commands point at a skill whose script is not there. Anything that
+  # fails it falls through to link_one's SKIP, which prints the remedy.
   if [ -d "$SKILL_DEST/$sname" ] && [ ! -L "$SKILL_DEST/$sname" ] \
      && [ -f "$SKILL_DEST/$sname/SKILL.md" ] \
-     && [ "$(skill_name_of "$SKILL_DEST/$sname/SKILL.md")" = "$sname" ]; then
+     && [ "$(skill_name_of "$SKILL_DEST/$sname/SKILL.md")" = "$sname" ] \
+     && [ -f "$SKILL_DEST/$sname/scripts/greenroom.py" ]; then
     echo "NOTE: $SKILL_DEST/$sname is already a standalone install of the $sname skill."
     echo "      Leaving it alone. Remove it first if you want this clone symlinked instead."
     skill_ok=$((skill_ok + 1))
@@ -295,6 +313,7 @@ fi
 # the skill did not install, registering them hands the user a /new, /add, /sync
 # that fail at use time instead of failing here, where the remedy is printed.
 cmd_linked=0
+cmd_skipped=0
 if [ -n "$install_failed" ]; then
   echo "not linking the commands: they only invoke the skill, which did not install"
 else
@@ -303,7 +322,11 @@ else
     cname="$(basename "$cmd")"
     link_result=""
     link_one "$cmd" "$CMD_DEST/$cname" "command $cname"
-    if [ "$link_result" = "linked" ]; then cmd_linked=$((cmd_linked + 1)); fi
+    if [ "$link_result" = "linked" ]; then
+      cmd_linked=$((cmd_linked + 1))
+    else
+      cmd_skipped=$((cmd_skipped + 1))
+    fi
   done
 fi
 
@@ -370,7 +393,14 @@ skill_summary="$skill_linked skill(s)"
 if [ "$skill_already" -gt 0 ]; then
   skill_summary="$skill_summary linked, $skill_already already installed"
 fi
-echo "Done. $skill_summary → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
+cmd_summary="$cmd_linked command(s)"
+if [ "$cmd_skipped" -gt 0 ]; then
+  # Do not let a green-looking summary bury a half-broken command set: after a
+  # moved clone these dangle with no provable owner, so each is skipped and the
+  # user's /new, /add and /sync stay broken until they remove the links.
+  cmd_summary="$cmd_summary ($cmd_skipped skipped -- see the SKIPs above)"
+fi
+echo "Done. $skill_summary → $SKILL_DEST; $cmd_summary → $CMD_DEST"
 
 # A skill we ship did not get installed. The SKIPs above say what to do; exit
 # non-zero so the failure is not buried under a cheerful "Done." line -- a
