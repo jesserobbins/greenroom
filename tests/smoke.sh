@@ -824,7 +824,7 @@ mkdir -p "$T/isoparent"
 [ -f "$T/isoparent/isoproj/.greenroom" ] || fail "isolated payload did not write the .greenroom marker"
 # SKILL.md routes to `sync` and `collect` too, and to references/*.md. A typo in a
 # router link is a dead pointer -- the same "documented but not shipped" bug class. ---
-for ref in $(grep -o 'references/[a-z-]*\.md' "$iso/greenroom/SKILL.md" | sort -u); do
+for ref in $(grep -o 'references/[A-Za-z0-9_-]*\.md' "$iso/greenroom/SKILL.md" | sort -u); do
   [ -f "$iso/greenroom/$ref" ] || fail "SKILL.md routes to $ref, which is not in the payload"
 done
 ( cd "$iso/greenroom" && ./scripts/greenroom.py collect --help ) >/dev/null \
@@ -888,8 +888,12 @@ ok "manual install is idempotent (re-run is clean, no phantom migration)"
 #          would silently no-op. It must be detected and removed. ---
 sh_mig="$T/shimhome"
 mkdir -p "$sh_mig/.claude/skills/greenroom"
-ln -s "$REPO_ROOT/skills/greenroom/scripts" "$sh_mig/.claude/skills/greenroom/scripts"
-ln -s "$REPO_ROOT/skills/greenroom/templates" "$sh_mig/.claude/skills/greenroom/templates"
+# The legacy shim pointed at the REPO ROOT's scripts/ and templates/, which moved
+# into skills/greenroom/ -- so in a real upgrade these links are dangling. Use the
+# real legacy targets, or the test passes on a layout that never shipped.
+ln -s "$REPO_ROOT/scripts" "$sh_mig/.claude/skills/greenroom/scripts"
+ln -s "$REPO_ROOT/templates" "$sh_mig/.claude/skills/greenroom/templates"
+[ ! -e "$sh_mig/.claude/skills/greenroom/scripts" ] || fail "test bug: the legacy shim fixture is not dangling"
 ln -s "$REPO_ROOT/skills/greenroom" "$sh_mig/.claude/skills/greenroom-setup"   # old skill name too
 HOME="$sh_mig" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh errored migrating the old shim"
 [ -L "$sh_mig/.claude/skills/greenroom" ] || fail "the old shim dir was not replaced by the skill symlink"
@@ -963,7 +967,21 @@ HOME="$rh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh erro
   || fail "a relative-target root symlink was left exposing the plugin manifest"
 ok "ownership checks resolve relative symlink targets, not just absolute ones"
 
-# --- 39. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+# --- 41. a DANGLING link at the skill path is replaced, not skipped. This is what
+#          our own link becomes once the clone is moved or renamed: ownership can no
+#          longer be proven, but a dead link helps nobody and a link the user
+#          actively uses is not dangling. Skipping here would make a re-run from
+#          the relocated clone silently install nothing. ---
+dh="$T/danglehome"
+mkdir -p "$dh/.claude/skills"
+ln -s "$T/moved-away/skills/greenroom" "$dh/.claude/skills/greenroom"   # target never existed
+out6="$(HOME="$dh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a dangling skill link"
+[ -f "$dh/.claude/skills/greenroom/SKILL.md" ] || fail "a dangling link at the skill path was not replaced"
+echo "$out6" | grep -q "SKIP skill greenroom" && fail "install.sh skipped a dangling link instead of replacing it: $out6"
+echo "$out6" | grep -q "dangling" || fail "install.sh replaced a dangling link without saying so: $out6"
+ok "a dangling link at the skill path is replaced, with a distinct message"
+
+# --- 42. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
 "$SCRIPT" new markproj --parent "$T/mark" >/dev/null
 gm="$T/mark/markproj/.greenroom"
@@ -984,7 +1002,7 @@ rm -f "$gm"
 [ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
 ok "sync adds .greenroom to a wrapper that lacks it"
 
-# --- 40. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+# --- 43. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
 fhm="$T/markforbid"
 mkdir -p "$fhm"
 mkrepo "$fhm/repo-public"
@@ -996,7 +1014,7 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
-# --- 41. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# --- 44. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
 # GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
 # .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
 mkdir -p "$T/nows"
@@ -1032,7 +1050,7 @@ ok "--workspace forces the workspace file regardless of detection"
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
 
-# --- 42. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+# --- 45. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
 mkdir -p "$T/vscode"
 GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
 vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"

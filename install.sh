@@ -61,6 +61,13 @@ link_one() {
   if [ -L "$link" ]; then
     if points_at_repo "$link"; then
       rm "$link"                                   # our own link: refresh it
+    elif [ ! -e "$link" ]; then
+      # Dangling. Our own link looks exactly like this after the clone is moved
+      # or renamed, and ownership can no longer be proven -- but nobody is served
+      # by a dead link sitting at our path, and a link the user actively uses is
+      # not dangling. Replace it, and say that is what happened.
+      rm "$link"
+      echo "replaced a dangling symlink at $link (its target no longer exists)"
     else
       echo "SKIP $label: $link is a symlink into somewhere else (leaving it untouched)"
       link_result="skip"

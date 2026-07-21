@@ -39,13 +39,21 @@ The skill's directory differs per install shape (plugin, `npx skills add`,
 manual clone), so resolve it first and reuse `$greenroom` for every call:
 
 ```bash
+greenroom=""
 for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" \
          "$HOME/.claude/skills/greenroom" \
-         "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom; do
-  [ -x "$c/scripts/greenroom.py" ] && greenroom="$c/scripts/greenroom.py" && break
+         "$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom \
+            2>/dev/null | sort -V | tail -1)"; do
+  if [ -n "$c" ] && [ -f "$c/scripts/greenroom.py" ]; then
+    greenroom="$c/scripts/greenroom.py"; break
+  fi
 done
-"$greenroom" <subcommand> [args]
+python3 "$greenroom" <subcommand> [args]
 ```
+
+The cache tier is version-sorted so the newest cached plugin wins, and the script
+is run through `python3` so a payload that lost its exec bit in transit still
+works.
 
 If that loop leaves `$greenroom` empty, this skill was loaded from a path none of
 those cover — locate `scripts/greenroom.py` under the directory this file was

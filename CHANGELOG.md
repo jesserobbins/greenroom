@@ -56,9 +56,14 @@ reaches a stable release.
 - The old script-root shim is dismantled by removing the two links we created,
   not by `rm -rf` on the whole directory. Anything else the user left in there
   survives, and the migration says so instead of deleting silently.
+- A dangling symlink at the skill path is replaced rather than skipped. Our own
+  link becomes dangling the moment the clone is moved, and skipping it made a
+  re-run from the relocated clone silently install nothing.
 - SKILL.md documents how to *find* `scripts/greenroom.py` — a resolver covering
   the plugin, `npx skills add`, and manual-clone layouts — rather than naming an
-  absolute path the agent had no way to derive.
+  absolute path the agent had no way to derive. The plugin-cache tier is
+  version-sorted so the newest cached copy wins over the lexically first, and
+  the script is invoked through `python3` so a lost exec bit is not fatal.
 - The skill's `description` no longer contains an unquoted colon-space (`layout:`
   → `layout —`). The `npx skills` YAML parser silently dropped the skill when the
   plain-scalar description value contained `: `, which made greenroom
