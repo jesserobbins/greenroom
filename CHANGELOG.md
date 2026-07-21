@@ -7,6 +7,8 @@ reaches a stable release.
 
 ## [Unreleased]
 
+## [0.2.0-alpha] - 2026-07-21
+
 ### Added
 - greenroom installs as a standalone skill on any agent:
   `npx skills add jesserobbins/greenroom`. The `skills/greenroom/` directory is
@@ -16,10 +18,15 @@ reaches a stable release.
   honest.
 
 ### Changed
-- **Breaking:** the skill is renamed `greenroom-setup` → `greenroom`, so the
-  plugin invocation is now `/greenroom:greenroom` and a standalone install is
-  `/greenroom`. The name covered only one of its four subcommands. Plugin users
-  need no action; `install.sh` migrates a manual install in place.
+- **Breaking:** the skill is renamed `setup` → `greenroom-setup` → `greenroom`,
+  so the plugin invocation is now `/greenroom:greenroom` and a standalone install
+  is `/greenroom`. The `npx skills` CLI derives a skill's install directory and
+  `@handle` from the `name:` field, so a bare `name: setup` installed as
+  `~/.claude/skills/setup/` and collided with any other ecosystem skill named
+  `setup`; the name had to carry the greenroom identity. `greenroom-setup` was
+  the first fix, but it covered only one of the skill's four subcommands, so the
+  final name is the bare project name. Plugin users need no action; `install.sh`
+  migrates a manual install in place.
 - `scripts/` and `templates/` moved from the repo root into
   `skills/greenroom/`. `greenroom.py` resolves templates relative to its own
   location, so this needed no code change.
@@ -38,15 +45,6 @@ reaches a stable release.
   fixed description string. The skills CLI silently drops a skill whose
   frontmatter fails to parse, so the class of bug matters more than the instance.
 
-### Previously
-- The skill was renamed from `setup` to `greenroom-setup`. The `npx skills` CLI
-  derives a skill's install directory and `@handle` from the `name:` field, so a
-  bare `name: setup` installed as `~/.claude/skills/setup/` and collided with any
-  other ecosystem skill named `setup`. Naming it `greenroom-setup` keeps the
-  skills.sh handle (`jesserobbins/greenroom@greenroom-setup`), the manual-install
-  directory, and the plugin handle identical and collision-free. The plugin
-  invocation is now `/greenroom:greenroom-setup`.
-
 ### Fixed
 - `install.sh` no longer replaces a symlink the user owns. It refreshed any
   symlink at the skill path unconditionally, so a link the migration correctly
@@ -56,14 +54,22 @@ reaches a stable release.
 - The old script-root shim is dismantled by removing the two links we created,
   not by `rm -rf` on the whole directory. Anything else the user left in there
   survives, and the migration says so instead of deleting silently.
-- A dangling symlink at the skill path is replaced rather than skipped. Our own
-  link becomes dangling the moment the clone is moved, and skipping it made a
-  re-run from the relocated clone silently install nothing.
+- A dangling symlink at the skill path is replaced rather than skipped, and a
+  dangling `greenroom-setup` link is migrated away on the same reasoning. Our own
+  links become dangling the moment the clone is moved, skipping them made a
+  re-run from the relocated clone silently install nothing, and a stale one left
+  the retired skill name registered forever.
+- An install that installs no skill now exits non-zero and prints the remedy,
+  instead of reporting `Done. 0 skill(s)` and leaving the user's `/greenroom`
+  quietly pointing at an older clone.
 - SKILL.md documents how to *find* `scripts/greenroom.py` — a resolver covering
   the plugin, `npx skills add`, and manual-clone layouts — rather than naming an
-  absolute path the agent had no way to derive. The plugin-cache tier is
-  version-sorted so the newest cached copy wins over the lexically first, and
-  the script is invoked through `python3` so a lost exec bit is not fatal.
+  absolute path the agent had no way to derive. It covers the project-local
+  `npx skills add` layout that the README leads with, the plugin-cache tier is
+  version-sorted so the newest cached copy wins over the lexically first, the
+  script is invoked through `python3` so a lost exec bit is not fatal, and an
+  unresolved path fails loudly instead of running `python3 ""`. A smoke test
+  extracts the snippet from SKILL.md and runs it against each install shape.
 - The skill's `description` no longer contains an unquoted colon-space (`layout:`
   → `layout —`). The `npx skills` YAML parser silently dropped the skill when the
   plain-scalar description value contained `: `, which made greenroom

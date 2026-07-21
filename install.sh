@@ -70,11 +70,13 @@ link_one() {
       echo "replaced a dangling symlink at $link (its target no longer exists)"
     else
       echo "SKIP $label: $link is a symlink into somewhere else (leaving it untouched)"
+      echo "     to install here instead: rm $link && re-run install.sh"
       link_result="skip"
       return
     fi
   elif [ -e "$link" ]; then
     echo "SKIP $label: $link exists and is not a symlink (leaving it untouched)"
+    echo "     to install here instead: move or remove $link, then re-run install.sh"
     link_result="skip"
     return
   fi
@@ -109,6 +111,8 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       echo "migrated: removed the old script-root shim at $OLD_SHIM"
     else
       echo "SKIP migration: $OLD_SHIM still holds files we did not create (leaving it untouched)"
+      echo "     the skill cannot be linked over a real directory -- move what you want to keep"
+      echo "     out of $OLD_SHIM, remove the directory, then re-run install.sh"
     fi
   else
     echo "SKIP migration: $OLD_SHIM is a directory we do not recognize (leaving it untouched)"
@@ -117,24 +121,32 @@ fi
 
 # Migration 2: the skill was renamed greenroom-setup -> greenroom. Drop our own
 # stale link so the old name stops resolving. Ownership-checked: a real file or
-# an unrelated symlink the user owns is left alone.
+# an unrelated symlink the user owns is left alone. A dangling link is removed on
+# the same reasoning link_one uses -- the old clone was deleted or moved, nothing
+# the user actively uses dangles, and leaving it keeps the retired skill name
+# registered forever.
 STALE="$SKILL_DEST/greenroom-setup"
 if points_at_repo "$STALE"; then
   rm "$STALE"
   echo "migrated: removed the stale greenroom-setup link (renamed to greenroom)"
+elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
+  rm "$STALE"
+  echo "migrated: removed a dangling greenroom-setup link (its target no longer exists)"
 fi
 
 # Link each skill under its own name. Skill names carry the greenroom identity
 # (e.g. `greenroom`), so a manual install gets a distinctive /greenroom rather
 # than a generic name that could collide with the user's own skills. (A plugin
 # install gives /greenroom:<name>.)
+skill_found=0
 skill_linked=0
 for skill_dir in "$REPO_DIR"/skills/*/; do
   [ -f "$skill_dir/SKILL.md" ] || continue          # only dirs that hold a skill
+  skill_found=$((skill_found + 1))
   sname="$(basename "$skill_dir")"
   link_result=""
   link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname"
-  [ "$link_result" = "linked" ] && skill_linked=$((skill_linked + 1))
+  if [ "$link_result" = "linked" ]; then skill_linked=$((skill_linked + 1)); fi
 done
 
 cmd_linked=0
@@ -143,7 +155,15 @@ for cmd in "$REPO_DIR"/commands/*.md; do
   cname="$(basename "$cmd")"
   link_result=""
   link_one "$cmd" "$CMD_DEST/$cname" "command $cname"
-  [ "$link_result" = "linked" ] && cmd_linked=$((cmd_linked + 1))
+  if [ "$link_result" = "linked" ]; then cmd_linked=$((cmd_linked + 1)); fi
 done
 
 echo "Done. $skill_linked skill(s) → $SKILL_DEST; $cmd_linked command(s) → $CMD_DEST"
+
+# Every skill was skipped. The SKIPs above say what to do; exit non-zero so the
+# failure is not buried under a cheerful "Done." line -- an install that installed
+# nothing is a failed install, not a quiet no-op.
+if [ "$skill_found" -gt 0 ] && [ "$skill_linked" -eq 0 ]; then
+  echo "install.sh installed no skills. See the SKIP notes above." >&2
+  exit 1
+fi

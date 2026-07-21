@@ -41,6 +41,7 @@ manual clone), so resolve it first and reuse `$greenroom` for every call:
 ```bash
 greenroom=""
 for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" \
+         "$PWD/.claude/skills/greenroom" \
          "$HOME/.claude/skills/greenroom" \
          "$(ls -d "$HOME"/.claude/plugins/cache/*/greenroom/*/skills/greenroom \
             2>/dev/null | sort -V | tail -1)"; do
@@ -48,12 +49,14 @@ for c in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/skills/greenroom" \
     greenroom="$c/scripts/greenroom.py"; break
   fi
 done
+[ -n "$greenroom" ] || { echo "greenroom.py not found; see the fallback below" >&2; exit 1; }
 python3 "$greenroom" <subcommand> [args]
 ```
 
-The cache tier is version-sorted so the newest cached plugin wins, and the script
-is run through `python3` so a payload that lost its exec bit in transit still
-works.
+`npx skills add` without `-g` installs into the *project*, which is why the
+`$PWD` tier comes before the global ones. The cache tier is version-sorted so the
+newest cached plugin wins, and the script runs through `python3` so a payload
+that lost its exec bit in transit still works.
 
 If that loop leaves `$greenroom` empty, this skill was loaded from a path none of
 those cover — locate `scripts/greenroom.py` under the directory this file was
