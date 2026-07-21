@@ -195,12 +195,18 @@ is_greenroom_checkout() {
 # symlinks, never clobber anything the user owns -- neither a real file nor a
 # symlink of their own. Sets `link_result` to "linked" or "skip".
 #
-# The fourth argument is the directory name we link OUT of -- `skills` or
-# `commands` -- and passing it opts into claiming a dangling link at this path. A
-# dead link is claimed only when its recorded target is <something>/<that dir>/<the
-# link name>, which is the only shape this installer ever wrote. That is what makes
-# it safe at generic names like new.md: a user's `-> /Volumes/ext/my-new.md`
-# matches neither half, and nothing anyone actively uses dangles.
+# The fourth argument is the directory name we link OUT of, and passing it opts
+# into claiming a dangling link at this path: the dead target must be
+# <something>/<that dir>/<the link name>.
+#
+# Only `skills` is ever passed. `commands` is NOT, and deliberately: while we do
+# only write <clone>/commands/<name>, that is the conventional layout for ANYONE's
+# Claude Code command collection, so a user whose
+# ~/.claude/commands/new.md -> ~/dotfiles/claude/commands/new.md goes dangling
+# (checkout moved, volume unmounted) is indistinguishable from us. `skills/greenroom`
+# carries our name and is distinctive; `commands/new.md` is not. A dangling command
+# link is reported with its remedy and left alone -- deleting something a user owns
+# is worse than making them run one `rm`.
 link_one() {
   local target="$1" link="$2" label="$3" claim_dangling="${4:-}" dest
   if [ -L "$link" ]; then
@@ -494,7 +500,7 @@ else
     [ -f "$cmd" ] || continue                      # no commands dir / no matches
     cname="$(basename "$cmd")"
     link_result=""
-    link_one "$cmd" "$CMD_DEST/$cname" "command $cname" commands
+    link_one "$cmd" "$CMD_DEST/$cname" "command $cname"
     if [ "$link_result" = "linked" ]; then
       cmd_linked=$((cmd_linked + 1))
     else

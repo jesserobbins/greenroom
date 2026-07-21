@@ -1482,31 +1482,32 @@ ok "the declared name comes from the frontmatter, not from a line in the body"
 #          stayed broken. The summary must say so. ---
 csh="$T/cmdskiphome"
 mkdir -p "$csh/.claude/skills" "$csh/.claude/commands"
-# Our own shape -- <clone>/commands/new.md -- after the clone moved. This is the
-# common upgrade, and it SELF-HEALS: only this installer ever wrote a link of that
-# shape, so a dead one is ours to replace. Leaving it skipped meant a green run
-# with three registered-but-broken slash commands.
+# `commands/<name>.md` is the conventional layout for ANYONE's Claude Code command
+# collection, so a dangling link of that shape is not provably ours -- a user whose
+# ~/dotfiles/claude/commands/new.md moved looks identical. We decline to claim it,
+# report the remedy, and let the summary say a command was skipped rather than
+# burying it behind a green Done. line. One `rm` for the user beats us deleting
+# something they own.
 ln -s "$T/moved-clone/commands/new.md" "$csh/.claude/commands/new.md"
 out24="$(HOME="$csh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a dangling command link: $out24"
-[ "$(readlink "$csh/.claude/commands/new.md")" = "$REPO_ROOT/commands/new.md" ] \
-  || fail "a dangling command link of our own shape was not repointed at this clone"
+[ "$(readlink "$csh/.claude/commands/new.md")" = "$T/moved-clone/commands/new.md" ] \
+  || fail "install.sh claimed a dangling command link it cannot prove is ours"
 echo "$out24" | grep -q "skipped -- see the SKIPs above" \
-  && fail "our own dangling command link was reported as skipped instead of healed: $out24"
+  || fail "the summary buried a skipped command behind a green Done. line: $out24"
 [ -L "$csh/.claude/skills/greenroom" ] || fail "the skill itself was not installed"
 
-# ...while a link of ANY other shape is still skipped, and the summary says so
-# rather than letting a green Done. line bury it.
+# The realistic collision: a user's OWN command collection, same conventional
+# shape, gone dangling. Nothing distinguishes it from ours, so it must survive.
 csh2="$T/cmdskiphome2"
-mkdir -p "$csh2/.claude/skills" "$csh2/.claude/commands"
-# Basename matches on purpose: only the PARENT-directory half of the shape check
-# rejects this, so a fixture differing in both would not test it.
-ln -s "/Volumes/ext-that-is-not-mounted/new.md" "$csh2/.claude/commands/new.md"
-out24b="$(HOME="$csh2" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a foreign command link: $out24b"
-[ "$(readlink "$csh2/.claude/commands/new.md")" = "/Volumes/ext-that-is-not-mounted/new.md" ] \
-  || fail "install.sh claimed a dangling command link that was never our shape"
-echo "$out24b" | grep -q "skipped -- see the SKIPs above" \
-  || fail "the summary buried a skipped command behind a green Done. line: $out24b"
-ok "our own dangling command links heal; foreign ones are skipped and named in the summary"
+mkdir -p "$csh2/.claude/skills" "$csh2/.claude/commands" "$csh2/dotfiles/claude/commands"
+ln -s "$csh2/dotfiles/claude/commands/new.md" "$csh2/.claude/commands/new.md"
+rm -rf "$csh2/dotfiles"                                   # they moved their dotfiles
+out24b="$(HOME="$csh2" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh errored on a user's command link: $out24b"
+[ "$(readlink "$csh2/.claude/commands/new.md")" = "$csh2/dotfiles/claude/commands/new.md" ] \
+  || fail "install.sh deleted a user's own dangling commands/new.md"
+echo "$out24b" | grep -q "cannot prove is ours" || fail "install.sh skipped it without saying why: $out24b"
+echo "$out24b" | grep -q "re-run install.sh" || fail "install.sh skipped it without a remedy: $out24b"
+ok "a dangling command link is reported, never claimed -- its shape is nobody's proof"
 
 # --- 70. withholding NEW command links when the skill did not install is only half
 #          the invariant: a previous successful run may have left ours registered,
@@ -1679,7 +1680,23 @@ out37="$(HOME="$uvh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc37=0 || rc37=$?
 [ "$rc37" -ne 0 ] || fail "install.sh reported success while blocked: $out37"
 ok "a dangling link to an unmounted volume survives at the skill path too"
 
-# --- 78. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
+# --- 78. the one corner of the dangling matrix that deliberately does NOT self-heal:
+#          the ancient ROOT symlink (~/.claude/skills/greenroom -> <clone>) whose
+#          clone was then deleted. Migration 1 needs the target to resolve, and the
+#          shape check needs `<...>/skills/greenroom`, which a clone root is not.
+#          Claiming it would mean claiming any dead link whose basename happens to
+#          match -- too broad. Pinned so the asymmetry stays deliberate. ---
+drh="$T/danglingroothome"
+mkdir -p "$drh/.claude/skills"
+ln -s "$T/deleted-old-clone/greenroom" "$drh/.claude/skills/greenroom"   # a clone ROOT, now gone
+out41="$(HOME="$drh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc41=0 || rc41=$?
+[ "$rc41" -ne 0 ] || fail "install.sh reported success while the old root symlink blocked it: $out41"
+[ -L "$drh/.claude/skills/greenroom" ] || fail "install.sh claimed a dangling clone-root link"
+echo "$out41" | grep -q "cannot prove is ours" || fail "install.sh did not say why it declined: $out41"
+echo "$out41" | grep -q "re-run install.sh" || fail "the declined root symlink came with no remedy: $out41"
+ok "a dangling ancient root symlink is declined with a remedy, not claimed"
+
+# --- 79. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
 #          user may have bound to their own repo, and a target on an unmounted
 #          volume or a moved clone reads as dangling too. The claim only holds for
 #          a path named for us. ---
@@ -1693,7 +1710,7 @@ echo "$out8" | grep -q "SKIP command new.md" || fail "install.sh did not report 
 [ -L "$dch/.claude/skills/greenroom" ] || fail "the skill itself was not installed"
 ok "a dangling link at a generic command name is left alone, unlike the skill path"
 
-# --- 79. re-cloning greenroom somewhere new and re-installing is a normal upgrade
+# --- 80. re-cloning greenroom somewhere new and re-installing is a normal upgrade
 #          path. The old clone is still on disk, so the link is neither ours-by-
 #          $REPO_DIR nor dangling -- keying ownership to $REPO_DIR alone turned that
 #          into a hard failure that installed nothing. ---
@@ -1713,7 +1730,7 @@ echo "$out7" | grep -q "repointed" || fail "install.sh repointed silently: $out7
 echo "$out7" | grep -q "SKIP skill greenroom" && fail "install.sh treated another greenroom clone as a user symlink: $out7"
 ok "re-installing from a second clone repoints the links instead of hard-failing"
 
-# --- 80. the SKILL.md path resolver actually resolves. It is the ONLY thing that
+# --- 81. the SKILL.md path resolver actually resolves. It is the ONLY thing that
 #          tells an agent where greenroom.py lives now that the commands are hollow,
 #          and it is prose -- nothing else would catch it drifting out of sync with
 #          the install shapes we ship. Extract the snippet and run it for each. ---
@@ -1870,7 +1887,7 @@ chmod -x "$proj/.claude/skills/greenroom/scripts/greenroom.py"
   && fail "the SKILL.md resolver reported success with no greenroom installed anywhere"
 ok "the SKILL.md path resolver finds the script in every install shape we ship"
 
-# --- 81. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+# --- 82. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
 "$SCRIPT" new markproj --parent "$T/mark" >/dev/null
 gm="$T/mark/markproj/.greenroom"
@@ -1891,7 +1908,7 @@ rm -f "$gm"
 [ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
 ok "sync adds .greenroom to a wrapper that lacks it"
 
-# --- 82. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+# --- 83. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
 fhm="$T/markforbid"
 mkdir -p "$fhm"
 mkrepo "$fhm/repo-public"
@@ -1903,7 +1920,7 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
-# --- 83. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# --- 84. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
 # GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
 # .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
 mkdir -p "$T/nows"
@@ -1939,7 +1956,7 @@ ok "--workspace forces the workspace file regardless of detection"
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
 
-# --- 84. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+# --- 85. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
 mkdir -p "$T/vscode"
 GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
 vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
@@ -1949,7 +1966,7 @@ mkdir -p "$T/vscode/vscodeproj/.vscode"
 [ -f "$vws" ] || fail "a present .vscode/ dir did not trigger the workspace write"
 ok "detection writes the workspace when .vscode/ exists even with no family binary"
 
-# --- 85. the block numbers themselves are unique and sequential. Inserting a test
+# --- 86. the block numbers themselves are unique and sequential. Inserting a test
 #          mid-file has collided the numbering twice now; duplicate identifiers make
 #          a failure ambiguous to triage, and nothing else notices. ---
 nums="$(grep -o '^# --- [0-9]*\.' "${BASH_SOURCE[0]}" | grep -o '[0-9]*')"
@@ -1960,7 +1977,7 @@ expected="$(seq 1 "$(printf '%s\n' "$nums" | wc -l | tr -d ' ')")"
   || fail "test block numbers are not a gapless 1..N sequence"
 ok "test block numbers are unique and sequential"
 
-# --- 86. every `## [x.y.z]` changelog heading has its reference-link definition.
+# --- 87. every `## [x.y.z]` changelog heading has its reference-link definition.
 #          Without one the heading renders with literal brackets on GitHub, which
 #          is invisible in the diff and only shows up on the released page. ---
 missing=""

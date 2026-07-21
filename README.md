@@ -34,7 +34,7 @@ The parent folder has no `.git/` of its own. It's an organizational container, s
 
 **Requirements:** macOS or Linux (Windows is supported via WSL2, which presents a Linux environment). You need Python 3 and `git` on your `PATH`; the standalone skill install also needs Node (for `npx`), and the manual install needs `bash`. greenroom uses POSIX paths and `$HOME` semantics, so native Windows (cmd/PowerShell) is not supported, and the script refuses to run there.
 
-Two ways to install, two philosophies:
+Two ways to install, two philosophies — plus a manual `git clone` below, for hacking on greenroom itself:
 
 - **[skills.sh](https://skills.sh/jesserobbins/greenroom)** copies greenroom into your project (or `-g` for globally), so you can hack on it and make it your own. Works across Claude Code, Codex, Cursor, and the 70+ other agents the skills CLI supports.
 - **The Claude Code plugin** keeps it as a read-only, always-current bundle you don't edit, and adds the `/greenroom:*` slash commands. Best when you just want it to work and follow along as it evolves.
