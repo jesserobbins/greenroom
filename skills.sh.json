@@ -1,0 +1,10 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "Private-by-default workflow",
+      "description": "Keep design docs, drafts, and review notes under git in a private repo beside the public one — so you can think in the open without publishing your raw thinking. The public repo is the stage; the private repo is the green room.",
+      "skills": ["greenroom"]
+    }
+  ]
+}
