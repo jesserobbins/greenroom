@@ -121,7 +121,18 @@ skill_name_of() {
     { sub(/\r$/, "") }                 # a CRLF checkout must not read as "no frontmatter"
     NR == 1 { if ($0 != "---") exit; next }
     /^---[[:space:]]*$/ { exit }
-    /^name:/ { sub(/^name:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }
+    # Quoting is valid YAML, and the smoke suite parse accepts it. Returning
+    # `"greenroom"` with its quotes would fail every ownership compare -- and each
+    # one fails in the direction that tells a user to remove a working install.
+    /^name:/ {
+      sub(/^name:[[:space:]]*/, ""); gsub(/[[:space:]]/, "")
+      q = substr($0, 1, 1)                       # \047 is a single quote: keeping it
+      if ((q == "\"" || q == "\047") \
+          && length($0) > 1 && substr($0, length($0), 1) == q) {
+        $0 = substr($0, 2, length($0) - 2)       # as an escape avoids ending this
+      }                                          # single-quoted awk program early
+      print; exit
+    }
   ' "$1"
 }
 
@@ -278,12 +289,22 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
     # Empty, or nothing but OS noise -- a partially cleaned or interrupted prior
     # install. Nothing to weigh, and leaving it would block the skill link and
     # fail the run over a file the user cannot see.
-    for n in $SHIM_NOISE; do rm -f "$OLD_SHIM/$n"; done
+    # Guarded: `rm -f` on a DIRECTORY returns non-zero, and under set -e that would
+    # abort mid-migration with no message -- the one path here that could die
+    # silently, where every other failure is a SKIP with a printed remedy.
+    for n in $SHIM_NOISE; do
+      if [ -f "$OLD_SHIM/$n" ] || [ -L "$OLD_SHIM/$n" ]; then rm -f "$OLD_SHIM/$n"; fi
+    done
     rmdir "$OLD_SHIM"
     echo "migrated: removed an empty or noise-only $OLD_SHIM"
   elif [ -n "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
     rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates"
-    for n in $SHIM_NOISE; do rm -f "$OLD_SHIM/$n"; done
+    # Guarded: `rm -f` on a DIRECTORY returns non-zero, and under set -e that would
+    # abort mid-migration with no message -- the one path here that could die
+    # silently, where every other failure is a SKIP with a printed remedy.
+    for n in $SHIM_NOISE; do
+      if [ -f "$OLD_SHIM/$n" ] || [ -L "$OLD_SHIM/$n" ]; then rm -f "$OLD_SHIM/$n"; fi
+    done
     rmdir "$OLD_SHIM"
     echo "migrated: removed the old script-root shim at $OLD_SHIM"
     # Name what was dropped: a dangling link is removed on inference, not proof,

@@ -8,20 +8,16 @@ Run it from **inside the public repo** (`--public` defaults to cwd, which must
 be a git repo); the sibling private dir is auto-detected. Pass
 `--public`/`--private` to run from elsewhere.
 
-```bash
-# $greenroom does not survive between shell calls. Paste SKILL.md's resolver block
-# verbatim at the top of THIS command, before the cd -- one shell, in this order:
-#   <SKILL.md resolver block, ending at the `[ -n "$greenroom" ] || ...` guard>
-cd <wrapper>/<project>-public
-python3 "$greenroom" collect            # dry-run, prints the plan
-```
+Each run is ONE shell command, built in three parts — `$greenroom` does not
+survive between calls, and these fragments are not runnable on their own:
 
-Then, as a second self-contained command (resolver again, then):
+1. SKILL.md's resolver block, verbatim, including its
+   `[ -n "$greenroom" ] || { ...; exit 1; }` guard
+2. `cd <wrapper>/<project>-public`
+3. `python3 "$greenroom" collect` — dry-run, prints the plan
 
-```bash
-cd <wrapper>/<project>-public
-python3 "$greenroom" collect --apply    # copy files into <project>-private/
-```
+Then repeat all three with `python3 "$greenroom" collect --apply` to copy the
+files into `<project>-private/`.
 
 **Copy-only.** Files are read from git at the chosen commit SHA and written into
 `<project>-private/<bucket>/`. Public history is never rewritten. Removing the
