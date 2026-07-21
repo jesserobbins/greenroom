@@ -19,11 +19,5 @@
     "open-source",
     "monorepo",
     "vscode"
-  ],
-  "skills": [
-    "./skills/greenroom"
-  ],
-  "commands": [
-    "./commands"
   ]
 }

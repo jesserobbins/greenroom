@@ -14,7 +14,6 @@ reaches a stable release.
   that directory, and nothing else, is what the skills CLI copies. A smoke test
   drives a full scaffold from an isolated copy of it to keep that guarantee
   honest.
-- `.claude-plugin/plugin.json` declares its `skills` and `commands` explicitly.
 
 ### Changed
 - **Breaking:** the skill is renamed `greenroom-setup` → `greenroom`, so the

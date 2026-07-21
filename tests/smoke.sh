@@ -789,13 +789,16 @@ m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", raw, re.S)
 assert m, "no frontmatter block at the very start of the file"
 try:
     import yaml
-    data = yaml.safe_load(m.group(1))
-except ImportError:                     # no PyYAML: fall back to a strict line check
-    data = {}
-    for line in m.group(1).splitlines():
-        k, _, v = line.partition(":")
-        assert _ and not k.startswith(" "), f"unparseable frontmatter line: {line!r}"
-        data[k.strip()] = v.strip()
+except ImportError:
+    # No PyYAML. Do NOT hand-roll a parser -- a strict line check rejects valid
+    # YAML (block scalars, nested maps) and would make this test's verdict depend
+    # on the developer's Python environment. Assert only what a regex can honestly
+    # verify -- a top-level `name: greenroom` line -- and skip the rest.
+    assert re.search(r"(?m)^name:[ \t]*greenroom[ \t]*$", m.group(1)), \
+        "no top-level `name: greenroom` line in the frontmatter"
+    print("NOTE: PyYAML absent -- checked the name: line only, skipped the YAML parse")
+    sys.exit(0)
+data = yaml.safe_load(m.group(1))
 assert isinstance(data, dict), "frontmatter is not a mapping"
 for field in ("name", "description"):
     assert isinstance(data.get(field), str) and data[field], f"{field} missing or not a string"
@@ -860,8 +863,11 @@ ok "manual install gives /greenroom with its script and templates attached"
 # --- 34. manual install is idempotent: a second run links nothing new and errors nothing ---
 out2="$(HOME="$mh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "second install.sh run errored"
 echo "$out2" | grep -q "SKIP" && fail "second install.sh run hit an unexpected SKIP: $out2"
+# The skill link now lives at the same path an ancient root symlink used, so a
+# too-broad migration match would "migrate" the healthy link on every re-run.
+echo "$out2" | grep -q "migrated:" && fail "second install.sh run reported a migration that never happened: $out2"
 [ -L "$mh/.claude/skills/greenroom" ] || fail "idempotent run dropped the greenroom link"
-ok "manual install is idempotent (re-run is clean, links stable)"
+ok "manual install is idempotent (re-run is clean, no phantom migration)"
 
 # --- 35. migration: the old script-root shim (a real dir of our symlinks, no
 #          SKILL.md) sat at exactly the path the renamed skill now claims. Left in

@@ -30,22 +30,27 @@ files, and session history stays in one bucket.
 
 ## Running greenroom
 
-The script ships beside this file. Run it from **this skill's directory**:
+The script ships beside this file, at `scripts/greenroom.py` under this skill's
+directory. Invoke it by its **absolute path** — where the script lives and what
+cwd you invoke it from are two different things:
 
 ```bash
-scripts/greenroom.py <subcommand> [args]
+/abs/path/to/skills/greenroom/scripts/greenroom.py <subcommand> [args]
 ```
+
+Several subcommands default a path argument to the current directory, so cwd
+matters. Pass the path explicitly, or run from the directory noted below.
 
 Pass `--help` (or `<subcommand> --help`) for the full flag list. The parser is
 the source of truth; do not re-document flags from prose.
 
-| Situation | Subcommand |
-|---|---|
-| Existing public repo, want private notes beside it | `retrofit <path-to-repo>` |
-| New project, cloning an existing public repo | `new <name> --clone <url>` |
-| New project, public repo doesn't exist yet | `new <name> --init-public` |
-| Added a fork or clone under an existing wrapper | `sync` |
-| Design docs already landed in the public repo | `collect` (see `references/collect.md`) |
+| Situation | Subcommand | Run from (if the path is omitted) |
+|---|---|---|
+| Existing public repo, want private notes beside it | `retrofit <path-to-repo>` | the repo to wrap |
+| New project, cloning an existing public repo | `new <name> --clone <url>` | the intended parent dir |
+| New project, public repo doesn't exist yet | `new <name> --init-public` | the intended parent dir |
+| Added a fork or clone under an existing wrapper | `sync` | anywhere inside the wrapper |
+| Design docs already landed in the public repo | `collect` (see `references/collect.md`) | inside the public repo |
 
 Add `--with-private-fork` to `new`/`retrofit` for a third repo: a private dev
 checkout cloned from the local public repo, with its remote named `upstream` so

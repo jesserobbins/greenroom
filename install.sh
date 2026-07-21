@@ -45,6 +45,17 @@ points_at_repo() {
   case "$dest" in "$REPO_DIR"|"$REPO_DIR"/*) return 0 ;; *) return 1 ;; esac
 }
 
+# points_at_repo_root <path>: true if <path> is a symlink resolving to the repo
+# root itself, not merely into it. The current skill link lives at the same path
+# as the ancient root symlink but points at $REPO_DIR/skills/greenroom, so the
+# root migration below must not match it.
+points_at_repo_root() {
+  [ -L "$1" ] || return 1
+  local dest
+  dest="$(cd "$(dirname "$1")" && readlink "$1")"
+  case "$dest" in "$REPO_DIR"|"$REPO_DIR"/) return 0 ;; *) return 1 ;; esac
+}
+
 # Migration 1: older installers created ~/.claude/skills/greenroom as a plain
 # directory holding scripts/ + templates/ symlinks, to give the slash commands a
 # script-path fallback. The script now ships inside the skill, and the skill is
@@ -55,7 +66,7 @@ points_at_repo() {
 OLD_SHIM="$SKILL_DEST/greenroom"
 if [ -L "$OLD_SHIM" ]; then
   # An even older installer symlinked this path straight at the repo root.
-  if points_at_repo "$OLD_SHIM"; then
+  if points_at_repo_root "$OLD_SHIM"; then
     rm "$OLD_SHIM"
     echo "migrated: removed the old greenroom root symlink at $OLD_SHIM"
   fi
