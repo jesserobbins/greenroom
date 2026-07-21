@@ -168,10 +168,19 @@ purge_shim_noise() {
 # a second skill lands under skills/ a user who standalone-installed THAT one is
 # not told to remove a working install.
 payload_is_complete() {
-  local entry
+  local entry name
   for entry in "$1"/*; do
     [ -e "$entry" ] || continue                  # unmatched glob
-    [ -e "$2/$(basename "$entry")" ] || return 1
+    name="$(basename "$entry")"
+    if [ -d "$entry" ]; then
+      # Present but EMPTY is not installed. An empty templates/ passes a
+      # name-only check and then fails at the user's first scaffold, which is
+      # the deferred failure this whole check exists to stop.
+      [ -d "$2/$name" ] || return 1
+      [ -n "$(find "$2/$name" -type f -print -quit 2>/dev/null)" ] || return 1
+    else
+      [ -e "$2/$name" ] || return 1
+    fi
   done
   return 0
 }
@@ -511,7 +520,14 @@ elif stale_dest="$(resolve_link "$STALE")" && is_greenroom_skill_dir "$stale_des
   # skills/greenroom. Whose checkout it is, is the test -- not what it declares.
   rm "$STALE"
   echo "migrated: removed a greenroom-setup link into another checkout at $stale_dest"
-elif [ -L "$STALE" ] && [ ! -e "$STALE" ]; then
+elif [ -L "$STALE" ] && [ ! -e "$STALE" ] \
+     && case "$(basename "$(readlink "$STALE")")" in
+          setup|greenroom-setup|greenroom) true ;; *) false ;;
+        esac; then
+  # Shape-checked like link_one's claim, not looser: a dead link here is only ours
+  # if it points at one of the three names this path has ever pointed at. A basename
+  # equal to the LINK name would miss the 0.1.4-0.1.7 shape, which pointed at
+  # skills/setup -- hence the set rather than a single comparison.
   rm "$STALE"
   echo "migrated: removed a dangling greenroom-setup link (its target no longer exists)"
 elif [ -d "$STALE" ] && [ ! -L "$STALE" ] && [ -f "$STALE/SKILL.md" ] \
