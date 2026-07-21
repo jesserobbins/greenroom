@@ -406,6 +406,14 @@ fi
 # (e.g. `greenroom`), so a manual install gets a distinctive /greenroom rather
 # than a generic name that could collide with the user's own skills. (A plugin
 # install gives /greenroom:<name>.)
+# The hollow commands all say "invoke the `greenroom` skill" -- smoke test 32
+# asserts every commands/*.md names the skill declared in skills/greenroom/SKILL.md,
+# which keeps this constant honest. Their fate follows THAT skill, not the repo as
+# a whole: once a second skill ships, its failure must not withhold commands that
+# do not mention it.
+COMMAND_SKILL="greenroom"
+greenroom_ok=""
+
 skill_found=0
 skill_linked=0
 skill_ok=0        # linked by us, OR already present as a standalone install
@@ -433,12 +441,14 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
     echo "NOTE: $SKILL_DEST/$sname is already a standalone install of the $sname skill."
     echo "      Leaving it alone. Remove it first if you want this clone symlinked instead."
     skill_ok=$((skill_ok + 1))
+    if [ "$sname" = "$COMMAND_SKILL" ]; then greenroom_ok=yes; fi
     continue
   fi
   link_one "${skill_dir%/}" "$SKILL_DEST/$sname" "skill $sname" "$claim"
   if [ "$link_result" = "linked" ]; then
     skill_linked=$((skill_linked + 1))
     skill_ok=$((skill_ok + 1))
+    if [ "$sname" = "$COMMAND_SKILL" ]; then greenroom_ok=yes; fi
   fi
 done
 
@@ -455,8 +465,8 @@ fi
 # that fail at use time instead of failing here, where the remedy is printed.
 cmd_linked=0
 cmd_skipped=0
-if [ -n "$install_failed" ]; then
-  echo "not linking the commands: they only invoke the skill, which did not install"
+if [ -z "$greenroom_ok" ]; then
+  echo "not linking the commands: they only invoke the $COMMAND_SKILL skill, which did not install"
   # Withholding new links is only half the invariant. A PREVIOUS successful run may
   # have left ours in place, and if its clone is gone they are registered and
   # broken -- the use-time failure this guard exists to prevent, just arrived by a
@@ -504,7 +514,7 @@ fi
 # would leave them with no greenroom skill at all, which is the opposite of every
 # "leaving it untouched" promise above.
 STALE="$SKILL_DEST/greenroom-setup"
-if [ -n "$install_failed" ]; then
+if [ -z "$greenroom_ok" ]; then
   if [ -e "$STALE" ] || [ -L "$STALE" ]; then
     echo "NOTE: leaving $STALE registered -- the new skill could not be installed."
     echo "      Resolve the SKIPs above and re-run; this run changed nothing there."

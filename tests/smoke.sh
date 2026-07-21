@@ -1587,6 +1587,20 @@ out39="$(HOME="$tsh" bash "$two/install.sh" 2>&1)" && rc39=0 || rc39=$?
   || fail "install.sh repointed a user's link at a generic second-skill name"
 [ "$rc39" -ne 0 ] || fail "install.sh reported success while a skill was skipped: $out39"
 [ -L "$tsh/.claude/skills/greenroom" ] || fail "greenroom itself was not linked"
+# The commands say "invoke the greenroom skill" and greenroom installed fine, so
+# withholding them because a DIFFERENT skill failed punishes the wrong thing --
+# and the migration-2 NOTE would claim the new skill could not be installed when
+# it plainly was.
+[ -e "$tsh/.claude/commands/new.md" ] \
+  || fail "install.sh withheld the commands because an unrelated second skill failed"
+echo "$out39" | grep -q "not linking the commands" \
+  && fail "install.sh said the skill the commands name did not install, but it did: $out39"
+ln -s "$REPO_ROOT/skills/greenroom" "$tsh/.claude/skills/greenroom-setup"   # a stale link to migrate
+out39b="$(HOME="$tsh" bash "$two/install.sh" 2>&1)" || true
+echo "$out39b" | grep -q "leaving $tsh/.claude/skills/greenroom-setup registered" \
+  && fail "migration 2 was suppressed by an unrelated second skill's failure: $out39b"
+[ ! -e "$tsh/.claude/skills/greenroom-setup" ] \
+  || fail "migration 2 did not run even though the skill it migrates installed"
 
 # (b) a standalone install of the SECOND skill is judged on its own payload
 tsh2="$T/twoskillshome2"
