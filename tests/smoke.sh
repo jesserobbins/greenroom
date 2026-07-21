@@ -1127,14 +1127,13 @@ ok "a proven link does not license deleting a foreign dangling sibling"
 #          decisions rest on the declared name, and rejecting it here makes the run
 #          tell the user to remove a working copy of greenroom. ---
 crh="$T/crlfhome"
-mkdir -p "$crh/.claude/skills/greenroom/scripts" "$crh/.claude/skills/greenroom/templates" \
-         "$crh/.claude/skills/greenroom/references"
+# A REAL payload, then only the SKILL.md swapped for a CRLF one -- a hand-built
+# skeleton is not a standalone install and would fail the payload check for
+# reasons that have nothing to do with line endings.
+mkdir -p "$crh/.claude/skills"
+cp -R "$REPO_ROOT/skills/greenroom" "$crh/.claude/skills/greenroom"
 printf -- '---\r\nname: greenroom\r\ndescription: a CRLF checkout\r\n---\r\n' \
   > "$crh/.claude/skills/greenroom/SKILL.md"
-: > "$crh/.claude/skills/greenroom/scripts/greenroom.py"
-# a real payload dir is not empty -- an empty templates/ fails at first scaffold
-: > "$crh/.claude/skills/greenroom/templates/private_AGENTS.md"
-: > "$crh/.claude/skills/greenroom/references/layout.md"
 out32="$(HOME="$crh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh failed on a CRLF SKILL.md: $out32"
 echo "$out32" | grep -q "already a standalone install" \
   || fail "a CRLF checkout was not recognized as a standalone install: $out32"
@@ -1144,14 +1143,10 @@ ok "the declared name is read correctly from a CRLF checkout"
 #          returning it with its quotes would fail every ownership compare -- and
 #          each one fails toward telling the user to remove a working install. ---
 qnh="$T/quotednamehome"
-mkdir -p "$qnh/.claude/skills/greenroom/scripts" "$qnh/.claude/skills/greenroom/templates" \
-         "$qnh/.claude/skills/greenroom/references"
+mkdir -p "$qnh/.claude/skills"
+cp -R "$REPO_ROOT/skills/greenroom" "$qnh/.claude/skills/greenroom"
 printf -- '---\nname: "greenroom"\ndescription: a quoted plain scalar\n---\n' \
   > "$qnh/.claude/skills/greenroom/SKILL.md"
-: > "$qnh/.claude/skills/greenroom/scripts/greenroom.py"
-# a real payload dir is not empty -- an empty templates/ fails at first scaffold
-: > "$qnh/.claude/skills/greenroom/templates/private_AGENTS.md"
-: > "$qnh/.claude/skills/greenroom/references/layout.md"
 out34="$(HOME="$qnh" bash "$REPO_ROOT/install.sh" 2>&1)" || fail "install.sh failed on a quoted name: $out34"
 echo "$out34" | grep -q "already a standalone install" \
   || fail "a double-quoted name was not recognized as the declared name: $out34"
@@ -1457,19 +1452,15 @@ ok "a stale copy with no scripts/ is not mistaken for a working standalone insta
 #          a body line (a YAML example, a table row) claiming `name: greenroom`
 #          would make install.sh report someone else's skill as ours and exit 0. ---
 imh="$T/impostorhome"
-# A COMPLETE payload shape (scripts/ and templates/), so the frontmatter scoping is
-# the only thing standing between the impostor and an "already installed" verdict.
-mkdir -p "$imh/.claude/skills/greenroom/scripts" "$imh/.claude/skills/greenroom/templates" \
-         "$imh/.claude/skills/greenroom/references"
+# A COMPLETE payload, so the frontmatter scoping is the only thing standing between
+# the impostor and an "already installed" verdict.
+mkdir -p "$imh/.claude/skills"
+cp -R "$REPO_ROOT/skills/greenroom" "$imh/.claude/skills/greenroom"
 # No frontmatter at all -- just prose that happens to contain a `name:` line. A
 # whole-file scan reads that as the declared name; only a frontmatter-scoped read
 # fails closed, which is the safe answer for a file that declares nothing.
 printf -- '# Somebody else notes\n\nExample of a skill header:\n\nname: greenroom\n' \
   > "$imh/.claude/skills/greenroom/SKILL.md"
-: > "$imh/.claude/skills/greenroom/scripts/greenroom.py"
-# a real payload dir is not empty -- an empty templates/ fails at first scaffold
-: > "$imh/.claude/skills/greenroom/templates/private_AGENTS.md"
-: > "$imh/.claude/skills/greenroom/references/layout.md"
 out26="$(HOME="$imh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc26=0 || rc26=$?
 echo "$out26" | grep -q "already a standalone install" \
   && fail "a body 'name: greenroom' line was mistaken for the declared name: $out26"
@@ -1582,7 +1573,22 @@ echo "$out38" | grep -q "already a standalone install" \
 [ "$rc38" -ne 0 ] || fail "install.sh reported success over an empty payload dir: $out38"
 ok "a payload dir that exists but is empty is not a working standalone install"
 
-# --- 74. the two pieces of second-skill future-proofing are unexercised while
+# --- 74. ...nor one whose scripts/ holds SOMETHING but not greenroom.py. An
+#          interrupted copy passes any skeleton check -- name present, directory
+#          non-empty -- and then fails at the user's first scaffold. The shipped
+#          file names have to be there, not just the shape. ---
+wph="$T/wrongpayloadhome"
+mkdir -p "$wph/.claude/skills"
+cp -R "$REPO_ROOT/skills/greenroom" "$wph/.claude/skills/greenroom"
+rm "$wph/.claude/skills/greenroom/scripts/greenroom.py"
+: > "$wph/.claude/skills/greenroom/scripts/LEFTOVER.md"      # non-empty, wrong contents
+out42="$(HOME="$wph" bash "$REPO_ROOT/install.sh" 2>&1)" && rc42=0 || rc42=$?
+echo "$out42" | grep -q "already a standalone install" \
+  && fail "install.sh accepted a scripts/ without greenroom.py as a working install: $out42"
+[ "$rc42" -ne 0 ] || fail "install.sh reported success over a partial payload: $out42"
+ok "a payload whose files differ from the shipped ones is not a working install"
+
+# --- 75. the two pieces of second-skill future-proofing are unexercised while
 #          skills/ holds one directory: the claim-dangling opt-in is gated on the
 #          name so a future `skills/notes` cannot seize a user's link, and
 #          payload_is_complete derives its entry list from the shipped dir rather
@@ -1632,7 +1638,7 @@ echo "$out40" | grep -q "already a standalone install of the notes skill" \
 [ ! -L "$tsh2/.claude/skills/notes" ] || fail "install.sh replaced a standalone install of the second skill"
 ok "a second skill with a generic name is neither seized nor judged by greenroom's payload"
 
-# --- 75. ownership checks resolve RELATIVE symlink targets. An install whose links
+# --- 76. ownership checks resolve RELATIVE symlink targets. An install whose links
 #          were made from inside ~/.claude/skills (so the target is relative) is
 #          still ours, and must be migrated rather than mistaken for a user link. ---
 rh="$T/relhome"
@@ -1649,7 +1655,7 @@ HOME="$rh" bash "$REPO_ROOT/install.sh" >/dev/null 2>&1 || fail "install.sh erro
   || fail "a relative-target root symlink was left exposing the plugin manifest"
 ok "ownership checks resolve relative symlink targets, not just absolute ones"
 
-# --- 76. a DANGLING link at the skill path is replaced, not skipped. This is what
+# --- 77. a DANGLING link at the skill path is replaced, not skipped. This is what
 #          our own link becomes once the clone is moved or renamed: ownership can no
 #          longer be proven, but a dead link helps nobody and a link the user
 #          actively uses is not dangling. Skipping here would make a re-run from
@@ -1663,7 +1669,7 @@ echo "$out6" | grep -q "SKIP skill greenroom" && fail "install.sh skipped a dang
 echo "$out6" | grep -q "dangling" || fail "install.sh replaced a dangling link without saying so: $out6"
 ok "a dangling link at the skill path is replaced, with a distinct message"
 
-# --- 77. ...but not a dangling link whose target was never shaped like ours. An
+# --- 78. ...but not a dangling link whose target was never shaped like ours. An
 #          unmounted volume must not read as abandoned here either -- the shim
 #          entries and the command links both refuse that, and the same failure
 #          mode deserves the same answer at all three sites. ---
@@ -1680,7 +1686,7 @@ out37="$(HOME="$uvh" bash "$REPO_ROOT/install.sh" 2>&1)" && rc37=0 || rc37=$?
 [ "$rc37" -ne 0 ] || fail "install.sh reported success while blocked: $out37"
 ok "a dangling link to an unmounted volume survives at the skill path too"
 
-# --- 78. the one corner of the dangling matrix that deliberately does NOT self-heal:
+# --- 79. the one corner of the dangling matrix that deliberately does NOT self-heal:
 #          the ancient ROOT symlink (~/.claude/skills/greenroom -> <clone>) whose
 #          clone was then deleted. Migration 1 needs the target to resolve, and the
 #          shape check needs `<...>/skills/greenroom`, which a clone root is not.
@@ -1696,7 +1702,7 @@ echo "$out41" | grep -q "cannot prove is ours" || fail "install.sh did not say w
 echo "$out41" | grep -q "re-run install.sh" || fail "the declined root symlink came with no remedy: $out41"
 ok "a dangling ancient root symlink is declined with a remedy, not claimed"
 
-# --- 79. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
+# --- 80. ...but NOT at a command path. new.md/add.md/sync.md are generic names a
 #          user may have bound to their own repo, and a target on an unmounted
 #          volume or a moved clone reads as dangling too. The claim only holds for
 #          a path named for us. ---
@@ -1710,7 +1716,7 @@ echo "$out8" | grep -q "SKIP command new.md" || fail "install.sh did not report 
 [ -L "$dch/.claude/skills/greenroom" ] || fail "the skill itself was not installed"
 ok "a dangling link at a generic command name is left alone, unlike the skill path"
 
-# --- 80. re-cloning greenroom somewhere new and re-installing is a normal upgrade
+# --- 81. re-cloning greenroom somewhere new and re-installing is a normal upgrade
 #          path. The old clone is still on disk, so the link is neither ours-by-
 #          $REPO_DIR nor dangling -- keying ownership to $REPO_DIR alone turned that
 #          into a hard failure that installed nothing. ---
@@ -1730,7 +1736,7 @@ echo "$out7" | grep -q "repointed" || fail "install.sh repointed silently: $out7
 echo "$out7" | grep -q "SKIP skill greenroom" && fail "install.sh treated another greenroom clone as a user symlink: $out7"
 ok "re-installing from a second clone repoints the links instead of hard-failing"
 
-# --- 81. the SKILL.md path resolver actually resolves. It is the ONLY thing that
+# --- 82. the SKILL.md path resolver actually resolves. It is the ONLY thing that
 #          tells an agent where greenroom.py lives now that the commands are hollow,
 #          and it is prose -- nothing else would catch it drifting out of sync with
 #          the install shapes we ship. Extract the snippet and run it for each. ---
@@ -1881,13 +1887,24 @@ esac
 chmod -x "$proj/.claude/skills/greenroom/scripts/greenroom.py"
 ( cd "$proj" && HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash "$resolver" ) >/dev/null \
   || fail "the SKILL.md resolver failed on a payload with no exec bit"
+# The block is offered for pasting into an arbitrary shell, and SKILL.md justifies
+# the cache pipeline's `|| true` by naming `set -e -o pipefail` specifically -- so
+# run it that way at least once, with an empty $HOME so the cache glob misses.
+( cd "$T/emptyhome" 2>/dev/null || mkdir -p "$T/emptyhome" && cd "$T/emptyhome"
+  HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash -eo pipefail "$resolver" ) >/dev/null 2>&1 \
+  && fail "the resolver under set -eo pipefail reported success with nothing installed"
+got="$( cd "$proj/sub/deeper" && HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash -eo pipefail "$resolver" )" \
+  || fail "the resolver aborted under set -eo pipefail (an unguarded failing command?)"
+[ "$got" = "$proj/.claude/skills/greenroom/scripts/greenroom.py" ] \
+  || fail "the resolver picked $got under set -eo pipefail"
+
 # and it must fail loudly, not run `python3 ""`, when nothing is installed
 ( cd "$T/emptyhome" 2>/dev/null || mkdir -p "$T/emptyhome" && cd "$T/emptyhome"
   HOME="$T/emptyhome" CLAUDE_PLUGIN_ROOT="" bash "$resolver" ) >/dev/null 2>&1 \
   && fail "the SKILL.md resolver reported success with no greenroom installed anywhere"
 ok "the SKILL.md path resolver finds the script in every install shape we ship"
 
-# --- 82. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
+# --- 83. new/retrofit write a .greenroom marker; sync adds it to a marker-less wrapper ---
 mkdir -p "$T/mark"
 "$SCRIPT" new markproj --parent "$T/mark" >/dev/null
 gm="$T/mark/markproj/.greenroom"
@@ -1908,7 +1925,7 @@ rm -f "$gm"
 [ -f "$gm" ] || fail "sync did not add .greenroom to a marker-less wrapper"
 ok "sync adds .greenroom to a wrapper that lacks it"
 
-# --- 83. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
+# --- 84. a stray .greenroom in a forbidden dir does NOT make it a wrapper (walk-up guard) ---
 fhm="$T/markforbid"
 mkdir -p "$fhm"
 mkrepo "$fhm/repo-public"
@@ -1920,7 +1937,7 @@ HOME="$fhm" sh -c "cd '$fhm/repo-public' && '$SCRIPT' sync" >/dev/null 2>&1 && r
 [ ! -f "$fhm/CLAUDE.md" ] || fail "sync scaffolded into a forbidden dir carrying a stray .greenroom"
 ok "a stray .greenroom in a forbidden dir is not treated as a wrapper (walk-up guard)"
 
-# --- 84. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
+# --- 85. workspace is skipped when no VS Code signal; --workspace / --no-workspace override ---
 # GREENROOM_TEST_NO_EDITOR makes the PATH probe find nothing, so detection falls to
 # .vscode/ and *.code-workspace presence only (deterministic regardless of the dev box).
 mkdir -p "$T/nows"
@@ -1956,7 +1973,7 @@ ok "--workspace forces the workspace file regardless of detection"
 [ -f "$nws" ] || fail "--no-workspace deleted an existing workspace file (it should only skip writing)"
 ok "--no-workspace runs cleanly and leaves an existing workspace untouched"
 
-# --- 85. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
+# --- 86. detection writes the workspace when a .vscode/ dir exists (binary absent) ---
 mkdir -p "$T/vscode"
 GREENROOM_TEST_NO_EDITOR=1 "$SCRIPT" new vscodeproj --parent "$T/vscode" --init-public >/dev/null
 vws="$T/vscode/vscodeproj/vscodeproj.code-workspace"
@@ -1966,7 +1983,7 @@ mkdir -p "$T/vscode/vscodeproj/.vscode"
 [ -f "$vws" ] || fail "a present .vscode/ dir did not trigger the workspace write"
 ok "detection writes the workspace when .vscode/ exists even with no family binary"
 
-# --- 86. the block numbers themselves are unique and sequential. Inserting a test
+# --- 87. the block numbers themselves are unique and sequential. Inserting a test
 #          mid-file has collided the numbering twice now; duplicate identifiers make
 #          a failure ambiguous to triage, and nothing else notices. ---
 nums="$(grep -o '^# --- [0-9]*\.' "${BASH_SOURCE[0]}" | grep -o '[0-9]*')"
@@ -1977,7 +1994,7 @@ expected="$(seq 1 "$(printf '%s\n' "$nums" | wc -l | tr -d ' ')")"
   || fail "test block numbers are not a gapless 1..N sequence"
 ok "test block numbers are unique and sequential"
 
-# --- 87. every `## [x.y.z]` changelog heading has its reference-link definition.
+# --- 88. every `## [x.y.z]` changelog heading has its reference-link definition.
 #          Without one the heading renders with literal brackets on GitHub, which
 #          is invisible in the diff and only shows up on the released page. ---
 missing=""

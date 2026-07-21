@@ -168,16 +168,21 @@ purge_shim_noise() {
 # a second skill lands under skills/ a user who standalone-installed THAT one is
 # not told to remove a working install.
 payload_is_complete() {
-  local entry name
+  local entry name inner
   for entry in "$1"/*; do
     [ -e "$entry" ] || continue                  # unmatched glob
     name="$(basename "$entry")"
     if [ -d "$entry" ]; then
-      # Present but EMPTY is not installed. An empty templates/ passes a
-      # name-only check and then fails at the user's first scaffold, which is
-      # the deferred failure this whole check exists to stop.
+      # Present but EMPTY is not installed, and neither is present-but-different:
+      # a scripts/ holding some leftover file but not greenroom.py passes any
+      # skeleton check and then fails at the user's first scaffold, which is the
+      # deferred failure this whole check exists to stop. The shipped file NAMES
+      # have to be there, so the payload's identity is what earns the verdict.
       [ -d "$2/$name" ] || return 1
-      [ -n "$(find "$2/$name" -type f -print -quit 2>/dev/null)" ] || return 1
+      for inner in "$entry"/*; do
+        [ -e "$inner" ] || continue                # unmatched glob
+        [ -e "$2/$name/$(basename "$inner")" ] || return 1
+      done
     else
       [ -e "$2/$name" ] || return 1
     fi
