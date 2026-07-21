@@ -1,0 +1,54 @@
+name: smoke
+
+# tests/smoke.sh is the only guard on the distribution shape -- the payload's
+# self-sufficiency, the context budget, the hollow commands, the SKILL.md path
+# resolver, and install.sh's ownership-checked migrations. Left to local runs,
+# every one of those guarantees depends on a developer remembering.
+# Push is narrowed to main so a same-repo PR branch is covered once, by the
+# pull_request event, rather than running the whole matrix twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The job only reads the checkout; do not inherit the repo default token scope.
+permissions:
+  contents: read
+
+# A superseded PR push should not keep burning both matrix legs. Pushes to main are
+# NOT cancelled: this suite is the only guard on the distribution shape, and two
+# merges in quick succession would otherwise leave the first commit unverified.
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  smoke:
+    runs-on: ${{ matrix.os }}
+    # The suite scaffolds dozens of throwaway repos and drives ~15 install.sh runs,
+    # several over deliberately broken symlinks. A hang must not burn the default
+    # 360-minute budget per leg.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags, so the legacy-migration fixture can be built from the real
+          # v0.1.7-alpha payload rather than a hand-made approximation.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      # Without PyYAML the frontmatter test degrades to a name-only regex check.
+      # CI is where the full parse should run.
+      - run: python3 -m pip install --upgrade pyyaml
+      - name: git identity for the throwaway repos the suite scaffolds
+        run: |
+          git config --global user.email "smoke@example.invalid"
+          git config --global user.name "smoke"
+          git config --global init.defaultBranch main
+      - run: tests/smoke.sh

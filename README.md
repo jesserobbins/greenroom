@@ -2,7 +2,12 @@
 
 > greenroom is a skill that sets up and maintains private spaces for working on your [superpowers](https://github.com/obra/Superpowers) docs, designs, plans, PRDs, and more until you decide what you want to share publicly.
 
+[![skills.sh](https://skills.sh/b/jesserobbins/greenroom)](https://skills.sh/jesserobbins/greenroom)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+```bash
+npx skills add jesserobbins/greenroom
+```
 
 ## Why greenroom?
 
@@ -27,9 +32,22 @@ The parent folder has no `.git/` of its own. It's an organizational container, s
 
 ## Install
 
-**Requirements:** macOS or Linux (Windows is supported via WSL2, which presents a Linux environment). You need Python 3 and `git` on your `PATH`; the manual install also needs `bash`. greenroom uses POSIX paths and `$HOME` semantics, so native Windows (cmd/PowerShell) is not supported, and the script refuses to run there.
+**Requirements:** macOS or Linux (Windows is supported via WSL2, which presents a Linux environment). You need Python 3 and `git` on your `PATH`; the standalone skill install also needs Node (for `npx`), and the manual install needs `bash`. greenroom uses POSIX paths and `$HOME` semantics, so native Windows (cmd/PowerShell) is not supported, and the script refuses to run there.
 
-### As a Claude Code plugin (recommended)
+Two ways to install, two philosophies — plus a manual `git clone` below, for hacking on greenroom itself:
+
+- **[skills.sh](https://skills.sh/jesserobbins/greenroom)** copies greenroom into your project (or `-g` for globally), so you can hack on it and make it your own. Works across Claude Code, Codex, Cursor, and the 70+ other agents the skills CLI supports.
+- **The Claude Code plugin** keeps it as a read-only, always-current bundle you don't edit, and adds the `/greenroom:*` slash commands. Best when you just want it to work and follow along as it evolves.
+
+### As a standalone skill (any agent)
+
+```bash
+npx skills add jesserobbins/greenroom
+```
+
+The whole skill directory is installed — `SKILL.md`, the script, and the templates — so it is fully functional with no other setup. Invoke it as `/greenroom` or just describe what you want.
+
+### As a Claude Code plugin (recommended for Claude Code)
 
 ```
 /plugin marketplace add jesserobbins/greenroom
@@ -46,7 +64,7 @@ cd greenroom
 ./install.sh
 ```
 
-`install.sh` symlinks the skill into `~/.claude/skills/greenroom-setup` (namespaced so it invokes as `/greenroom-setup`, not a generic `/setup`) and the slash commands into `~/.claude/commands/`. It also creates `~/.claude/skills/greenroom/` as a plain directory holding `scripts/` and `templates/` symlinks, so the commands' script-path fallback and the `collect` examples below resolve `greenroom.py`. It's idempotent and never clobbers a real file you own.
+`install.sh` symlinks the skill into `~/.claude/skills/greenroom` and the slash commands into `~/.claude/commands/`. The skill directory carries its own `scripts/` and `templates/`, so nothing else needs wiring. It's idempotent, never clobbers a real file you own, and cleans up the layout left by earlier versions.
 
 A manual install registers the commands without the plugin namespace, so the examples below that read `/greenroom:new`, `/greenroom:add`, and `/greenroom:sync` are invoked as `/new`, `/add`, and `/sync`. The plugin install is the recommended path and gives you the namespaced form.
 
@@ -71,7 +89,7 @@ The most common case is running it from inside a repo you've already cloned, so 
 /greenroom:new <name>                        # leave the public side for later
 ```
 
-Add `--with-private-fork` to either command and the script also scaffolds a `<name>-private-fork/` alongside: a private dev checkout cloned from the local `-public` repo, with its remote named `upstream` so `origin` stays free for a private GitHub repo. The full three-repo shape is `<name>-public` (the stage), `<name>-private-fork` (private dev), and `<name>-private` (the green room). Both commands run the same script (`scripts/greenroom.py`, subcommands `retrofit` and `new`) and accept `--public-name` / `--private-name` overrides when the defaults don't fit.
+Add `--with-private-fork` to either command and the script also scaffolds a `<name>-private-fork/` alongside: a private dev checkout cloned from the local `-public` repo, with its remote named `upstream` so `origin` stays free for a private GitHub repo. The full three-repo shape is `<name>-public` (the stage), `<name>-private-fork` (private dev), and `<name>-private` (the green room). Both commands run the same script (`skills/greenroom/scripts/greenroom.py`, subcommands `retrofit` and `new`) and accept `--public-name` / `--private-name` overrides when the defaults don't fit.
 
 **Add more repos to a project later**, like a fork to PR from or another clone:
 
@@ -113,19 +131,19 @@ As a safety net for a stray launch *inside* one repo, the script also writes a g
 
 ## Recovering docs already in public history
 
-If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo. The script path below assumes a manual `install.sh` install; on a plugin install the script lives under `~/.claude/plugins/` instead, so prefer the `/greenroom:*` slash commands or substitute that path:
+If design docs or notes already landed in the public repo, `collect` pulls them back into the private dir. Run it from inside the public repo. The script always sits inside the skill directory; the path below is where a manual or `npx skills add -g` install puts it. On a plugin install it lives under `~/.claude/plugins/` instead, so prefer the `/greenroom:*` slash commands or substitute that path:
 
 ```
 cd <parent>/<project>-public
-~/.claude/skills/greenroom/scripts/greenroom.py collect          # dry-run, prints the plan
-~/.claude/skills/greenroom/scripts/greenroom.py collect --apply  # copy into <project>-private/
+python3 ~/.claude/skills/greenroom/scripts/greenroom.py collect          # dry-run, prints the plan
+python3 ~/.claude/skills/greenroom/scripts/greenroom.py collect --apply  # copy into <project>-private/
 ```
 
 It scans two sources: files on the default branch that match private-shaped path rules (`docs/design/**`, `**/architecture.md`, `**/rfc-*.md`, and the like), and files reachable from unmerged branches whose names start with `design/`, `notes/`, `drafts/`, or `private/`. It reads each file from git history and writes a copy into the private dir. Public history is never rewritten. Review the plan, then re-run with `--apply` and commit when you are ready.
 
 ## Tests
 
-`tests/smoke.sh` builds throwaway repos in a temp dir and exercises the script's reliability-critical paths: retrofit when the parent already holds other repos, `collect` classification of files at the repo root, crash-safe restore when an in-place move fails, component-boundary matching in the plugin-config check, the full `sync` wiring (workspace, access, and map), the AGENTS.md core plus the Claude and Gemini adapters, and the `--with-private-fork` scaffold. It also covers the wrapper-safety guards: refusing `$HOME` and other forbidden roots as scaffold targets, the `GREENROOM_ROOT` boundary, the workspace sentinel, the `.greenroom` identity marker (including that a stray marker in a forbidden dir is still refused), the conditional workspace write and its `--workspace`/`--no-workspace` flags, and the namespaced manual install. Run it directly:
+`tests/smoke.sh` builds throwaway repos in a temp dir and exercises the script's reliability-critical paths: retrofit when the parent already holds other repos, `collect` classification of files at the repo root, crash-safe restore when an in-place move fails, component-boundary matching in the plugin-config check, the full `sync` wiring (workspace, access, and map), the AGENTS.md core plus the Claude and Gemini adapters, and the `--with-private-fork` scaffold. It also covers the wrapper-safety guards: refusing `$HOME` and other forbidden roots as scaffold targets, the `GREENROOM_ROOT` boundary, the workspace sentinel, the `.greenroom` identity marker (including that a stray marker in a forbidden dir is still refused), the conditional workspace write and its `--workspace`/`--no-workspace` flags. It also guards the distribution shape: that `skills/greenroom/` alone can scaffold, sync, and reach every reference it routes to, that the skill stays inside its context budget and relies on no plugin-only path variable, that the slash commands stay hollow, and that the manual installer migrates its own old layouts without touching a file or a live symlink the user owns (a *dangling* link at the skill's own path it does claim, but only when the dead target still has our `skills/<name>` shape — an unmounted volume or anything else is left alone and reported). Run it directly:
 
 ```
 tests/smoke.sh
@@ -135,7 +153,7 @@ tests/smoke.sh
 
 greenroom was built using greenroom: this repo is the stage, and the drafts, design notes, and launch thinking behind it live in a private green room right next to it. Nothing from there ships, which is the whole point.
 
-`skills/greenroom-setup/SKILL.md` carries the full conventions, edge cases, and the agent-facing instructions. The slash-command definitions live in `commands/`. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
+`skills/greenroom/SKILL.md` carries the agent-facing instructions, with the detail in `skills/greenroom/references/`. The script and templates live inside that same directory, which is the entire installable payload. The slash-command definitions in `commands/` are thin triggers that hold no logic. Design notes on why the layout is shaped this way are in [`docs/design.md`](docs/design.md).
 
 ## License
 
