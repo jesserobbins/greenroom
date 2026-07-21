@@ -43,9 +43,15 @@ manual clone), so resolve it first and reuse `$greenroom` for every call:
 # too. $HOME is skipped -- it is an ancestor of almost every cwd, so matching it
 # here would let a global install win the PROJECT tier and shadow the cache below.
 proj=""; d="$PWD"
-while [ -n "$d" ] && [ "$d" != "/" ]; do
-  if [ "$d" != "$HOME" ] && [ -f "$d/.claude/skills/greenroom/scripts/greenroom.py" ]; then
+while [ -n "$d" ] && [ "$d" != "/" ] && [ "$d" != "$HOME" ]; do
+  if [ -f "$d/.claude/skills/greenroom/scripts/greenroom.py" ]; then
     proj="$d/.claude/skills/greenroom"; break
+  fi
+  # Stop at the project boundary: above it a stray .claude/ belongs to something
+  # else and must not outrank the plugin cache. Exception: a greenroom wrapper
+  # sits one level above its repos, so let the walk cross into it.
+  if [ -e "$d/.git" ] || [ -e "$d/.greenroom" ]; then
+    if [ ! -e "$(dirname "$d")/.greenroom" ]; then break; fi
   fi
   d="$(dirname "$d")"
 done

@@ -60,7 +60,10 @@ reaches a stable release.
   the two links we created — the decision is made before anything is removed, so
   a `SKIP migration: ... leaving it untouched` is now true. It previously tore
   out our links and *then* discovered `rmdir` could not empty the directory,
-  leaving the user's old script fallback broken with no skill linked over it. It
+  leaving the user's old script fallback broken with no skill linked over it. OS
+  noise (`.DS_Store`, `Thumbs.db`, `.localized`) does not count as a file the
+  user left, and an empty directory is simply removed rather than called foreign
+  — either one previously failed the whole install over something invisible. It
   is also
   recognized when those links merely dangle, which is what they do in the common
   upgrade: old clone deleted, greenroom re-cloned elsewhere, `install.sh` re-run.
@@ -93,7 +96,10 @@ reaches a stable release.
   project-local `npx skills add` layout the README leads with, so it still
   resolves once the agent has `cd`'d into a repo — skipping `$HOME` itself, which
   is an ancestor of nearly every cwd and would otherwise let a global install win
-  the project tier; the plugin-cache tier sorts on
+  the project tier, and stopping at the project boundary so an unrelated
+  ancestor's `.claude/` cannot outrank the plugin cache (a greenroom wrapper is
+  the one boundary the walk crosses, since it sits above its repos); the
+  plugin-cache tier sorts on
   the version directory alone, so neither a lexically-first version nor a second
   cached marketplace owner can outrank the newest; the
   script is invoked through `python3` so a lost exec bit is not fatal, and an

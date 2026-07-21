@@ -78,11 +78,12 @@ looks_like_ours() {
   return 1
 }
 
-# link <target> <link-path> <label>: refresh our own symlinks, never clobber
-# anything the user owns -- neither a real file nor a symlink of their own.
-# Sets `link_result` to "linked" or "skip".
-# link_one <target> <link-path> <label> [claim-dangling]: pass a non-empty fourth
-# argument only for a path whose NAME is ours (`skills/greenroom`). A dangling
+# link_one <target> <link-path> <label> [claim-dangling]: refresh our own
+# symlinks, never clobber anything the user owns -- neither a real file nor a
+# symlink of their own. Sets `link_result` to "linked" or "skip".
+#
+# Pass a non-empty fourth argument only for a path whose NAME is ours
+# (`skills/greenroom`), which opts into claiming a dangling link there. A dangling
 # link there is almost certainly our own after the clone moved. The command links
 # are generic names -- new.md, add.md, sync.md -- that a user may well have bound
 # to their own repo, and a target on an unmounted volume or a moved clone reads
@@ -149,9 +150,14 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
   # upgrade, where the old clone was deleted and greenroom re-cloned elsewhere.
   shim_is_ours=""
   shim_has_extras=""
+  shim_entries=0
   for entry in "$OLD_SHIM"/* "$OLD_SHIM"/.[!.]* "$OLD_SHIM"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue       # unmatched glob
+    shim_entries=$((shim_entries + 1))
     case "$(basename "$entry")" in
+      # OS noise, not the user's. A Finder-created .DS_Store is invisible to `ls`
+      # and would otherwise fail the whole install over a file nobody put there.
+      .DS_Store|Thumbs.db|.localized) ;;
       scripts|templates)
         if points_at_repo "$entry"; then
           shim_is_ours=yes
@@ -164,8 +170,14 @@ elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
       *) shim_has_extras=yes ;;
     esac
   done
-  if [ -n "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
-    rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates"
+  if [ "$shim_entries" -eq 0 ]; then
+    # An empty dir -- a partially cleaned or interrupted prior install. Nothing to
+    # weigh, and leaving it would block the skill link and fail the run.
+    rmdir "$OLD_SHIM"
+    echo "migrated: removed an empty $OLD_SHIM"
+  elif [ -n "$shim_is_ours" ] && [ -z "$shim_has_extras" ]; then
+    rm -f "$OLD_SHIM/scripts" "$OLD_SHIM/templates" \
+          "$OLD_SHIM/.DS_Store" "$OLD_SHIM/Thumbs.db" "$OLD_SHIM/.localized"
     rmdir "$OLD_SHIM"
     echo "migrated: removed the old script-root shim at $OLD_SHIM"
   elif [ -n "$shim_is_ours" ]; then
