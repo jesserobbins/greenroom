@@ -39,10 +39,14 @@ The skill's directory differs per install shape (plugin, `npx skills add`,
 manual clone), so resolve it first and reuse `$greenroom` for every call:
 
 ```bash
-# project-local install: walk up from $PWD, so it resolves from a subdirectory too
+# project-local install: walk up from $PWD, so it resolves from a subdirectory
+# too. $HOME is skipped -- it is an ancestor of almost every cwd, so matching it
+# here would let a global install win the PROJECT tier and shadow the cache below.
 proj=""; d="$PWD"
 while [ -n "$d" ] && [ "$d" != "/" ]; do
-  [ -f "$d/.claude/skills/greenroom/scripts/greenroom.py" ] && proj="$d/.claude/skills/greenroom" && break
+  if [ "$d" != "$HOME" ] && [ -f "$d/.claude/skills/greenroom/scripts/greenroom.py" ]; then
+    proj="$d/.claude/skills/greenroom"; break
+  fi
   d="$(dirname "$d")"
 done
 # newest cached plugin version, keyed on the VERSION dir, not the whole path

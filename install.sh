@@ -139,12 +139,22 @@ if [ -L "$OLD_SHIM" ]; then
     echo "migrated: removed the old greenroom root symlink at $OLD_SHIM"
   fi
 elif [ -d "$OLD_SHIM" ] && [ ! -e "$OLD_SHIM/SKILL.md" ]; then
-  if points_at_repo "$OLD_SHIM/scripts" || points_at_repo "$OLD_SHIM/templates"; then
+  # The shim is also ours when its links merely DANGLE: delete the old clone,
+  # re-clone elsewhere, re-run, and points_at_repo cannot prove a thing. Without
+  # this the migration calls the user's own shim foreign, link_one then refuses
+  # the real directory, and the install exits 1 having done nothing.
+  shim_is_ours=""
+  for owned in scripts templates; do
+    if points_at_repo "$OLD_SHIM/$owned"; then shim_is_ours=yes; fi
+    if [ -L "$OLD_SHIM/$owned" ] && [ ! -e "$OLD_SHIM/$owned" ]; then shim_is_ours=yes; fi
+  done
+  if [ -n "$shim_is_ours" ]; then
     # Remove only the two links we created, then rmdir. If the user dropped
     # anything else in here, the rmdir fails and their files survive -- better a
     # loud SKIP than a silent `rm -rf` of a directory we only partly own.
     for owned in scripts templates; do
       if points_at_repo "$OLD_SHIM/$owned"; then rm -f "$OLD_SHIM/$owned"; fi
+      if [ -L "$OLD_SHIM/$owned" ] && [ ! -e "$OLD_SHIM/$owned" ]; then rm -f "$OLD_SHIM/$owned"; fi
     done
     if rmdir "$OLD_SHIM" 2>/dev/null; then
       echo "migrated: removed the old script-root shim at $OLD_SHIM"

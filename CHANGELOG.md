@@ -58,7 +58,9 @@ reaches a stable release.
   targets instead of only absolute ones.
 - The old script-root shim is dismantled by removing the two links we created,
   not by `rm -rf` on the whole directory. Anything else the user left in there
-  survives, and the migration says so instead of deleting silently.
+  survives, and the migration says so instead of deleting silently. It is also
+  recognized when those links merely dangle, which is what they do in the common
+  upgrade: old clone deleted, greenroom re-cloned elsewhere, `install.sh` re-run.
 - A dangling symlink at the *skill* path is replaced rather than skipped, and a
   `greenroom-setup` link is migrated away whether it dangles or points into
   another live checkout. Our own links become dangling the moment the clone is
@@ -82,7 +84,9 @@ reaches a stable release.
   the plugin, `npx skills add`, and manual-clone layouts — rather than naming an
   absolute path the agent had no way to derive. It walks up from `$PWD` for the
   project-local `npx skills add` layout the README leads with, so it still
-  resolves once the agent has `cd`'d into a repo; the plugin-cache tier sorts on
+  resolves once the agent has `cd`'d into a repo — skipping `$HOME` itself, which
+  is an ancestor of nearly every cwd and would otherwise let a global install win
+  the project tier; the plugin-cache tier sorts on
   the version directory alone, so neither a lexically-first version nor a second
   cached marketplace owner can outrank the newest; the
   script is invoked through `python3` so a lost exec bit is not fatal, and an
@@ -223,6 +227,8 @@ behavior may still change.
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
 [#3]: https://github.com/jesserobbins/greenroom/issues/3
 [#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.2.0-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.2.0-alpha
+[0.1.8-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.8-alpha
 [0.1.7-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.7-alpha
 [0.1.6-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.6-alpha
 [0.1.5-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.1.5-alpha
