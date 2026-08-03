@@ -1,6 +1,6 @@
 # AGENTS.md -- {{PROJECT_NAME}} (wrapper)
 
-This is the **launch home** for the `{{PROJECT_NAME}}` project: a plain directory (not a git repo) that holds the project's repos as subdirectories. Launching your agent here is the supported, canonical way to work on this project.
+This is the **launch home** for the `{{PROJECT_NAME}}` project. It is a plain directory, not a git repo. It holds the project's repos as subdirectories. Launch your agent here to work on this project.
 
 ## How to launch (any editor)
 
@@ -10,7 +10,15 @@ From a terminal:
 cd <this directory> && claude   # or: codex, gemini, ...
 ```
 
-That is the whole rule, and it works in any editor or none. Because this directory is the launch cwd, every child repo below is readable and writable with no extra wiring, session history stays in **one** bucket, and each child repo's own `AGENTS.md` loads automatically the first time you touch its files. If you use a VS Code-family editor (VS Code, Cursor, …) and a `*.code-workspace` was written here, you can open it or run the `Claude Code ({{CANONICAL_DIR_NAME}})` task instead. The repo map lives in `README.md` in this directory.
+That is the whole rule. It works in any editor, or in none.
+
+This directory is the launch cwd. As a result:
+
+- Every child repo below is readable and writable with no extra wiring.
+- Session history stays in **one** bucket.
+- Each child repo's own `AGENTS.md` loads the first time you touch its files.
+
+If you use a VS Code-family editor, look for a `*.code-workspace` file in this directory. If that file is present, you can open it instead, or run the `Claude Code ({{CANONICAL_DIR_NAME}})` task. The repo map is in `README.md` in this directory.
 
 ## Where to work
 
@@ -18,8 +26,9 @@ That is the whole rule, and it works in any editor or none. Because this directo
 - `*-private/` -- private notes, never published. The "green room."
 - Other sibling repos (forks, docs) -- see the README map.
 
-## Leak hygiene (must-know before you touch any repo)
+## Leak hygiene (read this before you touch any repo)
 
-- The `*-private` repo and this wrapper are **never published.** Nothing from them ships.
-- Reference public artifacts by GitHub URL (commit SHA / PR number), never by local path. When pasting from private notes into a public PR/commit, strip path references. The path itself is a small leak.
-- New design thinking, drafts, and review notes land in `*-private/`, not in the public repo.
+- The `*-private` repo and this wrapper are **never published.** Nothing in them ships.
+- Reference public artifacts by GitHub URL (commit SHA or PR number), never by local path.
+- The path itself is a small leak. When you paste from private notes into a public PR or commit, remove the path references.
+- New design thinking, drafts, and review notes go in `*-private/`, not in the public repo.

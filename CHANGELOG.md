@@ -7,6 +7,21 @@ reaches a stable release.
 
 ## [Unreleased]
 
+### Fixed
+- `sync` again migrates a `CLAUDE.md` written by an *older* greenroom. The
+  greenroom-authored check compared the file against a render of the current
+  `wrapper_AGENTS.md`, so every reword of that template silently reclassified
+  the wrappers it was meant to rescue: `sync` skipped the migration and reported
+  "CLAUDE.md looks hand-edited" about a file the user had never touched. Since
+  the template has been reworded twice, wrappers scaffolded by 0.1.0-alpha and
+  0.1.1-alpha were already stranded before this release. The check now matches
+  the current template plus every superseded generation, snapshotted under
+  `skills/greenroom/templates/legacy/`. A drift guard in `tests/smoke.sh` walks
+  the template's git history and fails when a shipped generation is missing from
+  that directory, so the next reword cannot reintroduce this quietly. The old
+  test could not have caught it: it copied the current `AGENTS.md` into
+  `CLAUDE.md`, which only ever proved that today's template matches itself.
+
 ## [0.2.1-alpha] - 2026-07-21
 
 ### Fixed

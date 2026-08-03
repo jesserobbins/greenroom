@@ -1,54 +1,59 @@
 # Collecting private-shaped docs from public history
 
-Once the layout is in place, `collect` recovers private-shaped files that were
-committed to the public repo and copies them into the right
-`<project>-private/<bucket>/`.
+Some private-shaped files reach the public repo before the layout is in place.
+Once the layout is in place, `collect` recovers those files. It copies each one
+into the correct `<project>-private/<bucket>/` directory.
 
-Run it from **inside the public repo** (`--public` defaults to cwd, which must
-be a git repo); the sibling private dir is auto-detected. Pass
-`--public`/`--private` to run from elsewhere.
+Run `collect` from **inside the public repo**. The `--public` option defaults to
+cwd, which must be a git repo. The script then finds the sibling private repo
+automatically. To run from elsewhere, pass `--public` and `--private`.
 
-Each run is ONE shell command, built in three parts — `$greenroom` does not
-survive between calls, and these fragments are not runnable on their own:
+Each run is ONE shell command, built from three parts. `$greenroom` does not
+survive between calls, and these fragments do not run on their own:
 
-1. SKILL.md's resolver block, verbatim, including its
-   `[ -n "$greenroom" ] || { ...; exit 1; }` guard
+1. The resolver block from SKILL.md, verbatim. Include its
+   `[ -n "$greenroom" ] || { ...; exit 1; }` guard.
 2. `cd <wrapper>/<project>-public`
-3. `python3 "$greenroom" collect` — dry-run, prints the plan
+3. `python3 "$greenroom" collect` -- a dry run, which prints the plan.
 
-Then repeat all three with `python3 "$greenroom" collect --apply` to copy the
-files into `<project>-private/`.
+Read the plan. Then repeat all three parts with
+`python3 "$greenroom" collect --apply` to copy the files into
+`<project>-private/`.
 
-**Copy-only.** Files are read from git at the chosen commit SHA and written into
-`<project>-private/<bucket>/`. Public history is never rewritten. Removing the
-originals from public history requires `git filter-repo` and is intentionally
-out of scope.
+**Copy-only.** The script reads each file from git at the chosen commit SHA. It
+writes the file into `<project>-private/<bucket>/`. It never rewrites public
+history. To remove the originals from public history you need `git filter-repo`,
+which is out of scope for greenroom on purpose.
 
 ## Sources scanned
 
-1. **Default branch (`main`/`master`)**: files matching the path-rule list (for
-   example `docs/design/**`, `docs/architecture.md`, `**/rfc-*.md`). Docs that
-   landed on main and probably shouldn't have.
+1. **The default branch (`main` or `master`)**: files that match the path-rule
+   list, for example `docs/design/**`, `docs/architecture.md`, and
+   `**/rfc-*.md`. These are docs that reached main and belong in the private
+   repo.
 2. **Unmerged branches whose names start with a private prefix**: `design/`,
-   `notes/`, `drafts/`, `private/`. Files reachable from those branches but
-   absent from the default branch get pulled in.
+   `notes/`, `drafts/`, and `private/`. The script pulls in files that are
+   reachable from those branches but absent from the default branch.
 
-The branch-name convention is the retroactive signal: these prefixes mark
-branches that hold private-bound work, so anything on them that never reached
-main is a candidate. Override with repeated `--branch-prefix` flags.
+The branch-name convention is the retroactive signal. These prefixes mark
+branches that hold private-bound work. Anything on such a branch that never
+reached main is therefore a candidate. To use different prefixes, pass
+`--branch-prefix` once per prefix.
 
 ## Classification
 
-Rules-only: path/filename maps to a bucket (`docs`, `notes`, `drafts`,
-`reviews`, `research`). Files on a private-prefix branch with no matching rule
-fall back to `docs/`.
+Classification is rules-only: the path and filename map the file to a bucket.
+The buckets are `docs`, `notes`, `drafts`, `reviews`, and `research`. A file on
+a private-prefix branch with no matching rule goes to `docs/`.
 
-Notes get a `YYYY-MM-DD-` filename prefix from the file's last-commit date
-unless they're already date-prefixed.
+Files in the `notes` bucket get a `YYYY-MM-DD-` filename prefix, taken from the
+date of the file's last commit. A file that already has a date prefix keeps it.
 
-Same path on multiple branches → keep the **latest version** by commit date.
+If the same path is on more than one branch, the script keeps the **latest
+version** by commit date.
 
 ## After `--apply`
 
-Review `git -C <wrapper>/<project>-private status` and commit when ready.
-Provenance lives in that commit's message, not in sidecar manifests.
+Read `git -C <wrapper>/<project>-private status`, then commit when you are
+ready. The provenance of the files belongs in that commit's message, not in a
+sidecar manifest.

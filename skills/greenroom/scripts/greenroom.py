@@ -573,6 +573,28 @@ def write_greenroom_marker(wrapper: Path) -> Path:
     return path
 
 
+def _authored_wrapper_renders(subs: dict[str, str]) -> set[str]:
+    """Every wrapper-orientation text greenroom has ever written, normalized.
+
+    The current wrapper_AGENTS.md plus each superseded generation in
+    templates/legacy/. A missing or unreadable legacy dir is not fatal: the
+    current template alone still matches wrappers from this release.
+    """
+    renders = {render_template("wrapper_AGENTS.md", subs).rstrip()}
+    legacy_dir = TEMPLATES_DIR / "legacy"
+    if not legacy_dir.is_dir():
+        return renders
+    for path in sorted(legacy_dir.glob("wrapper_AGENTS.*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for k, v in subs.items():
+            text = text.replace(k, v)
+        renders.add(text.rstrip())
+    return renders
+
+
 def migrate_claude_to_agents(
     wrapper: Path, project_name: str, canonical: Optional[str]
 ) -> Optional[tuple[Path, str]]:
@@ -581,8 +603,18 @@ def migrate_claude_to_agents(
     Returns (agents_path, "migrated") if migration happened, else None.
 
     Detection rule: CLAUDE.md content (normalized) equals what greenroom would
-    write from the wrapper_AGENTS.md template with the same project/canonical
-    subs. If content differs, it is hand-edited and left alone.
+    write from the wrapper_AGENTS.md template -- the current one, or ANY
+    superseded generation in templates/legacy/ -- with the same
+    project/canonical subs. If it matches none of them, it is hand-edited and
+    left alone.
+
+    The legacy generations are load-bearing, not housekeeping. The wrappers that
+    still need this migration were scaffolded by an OLDER greenroom, so their
+    CLAUDE.md holds that release's wording. Matching only the current template
+    means every reword of wrapper_AGENTS.md silently reclassifies those wrappers
+    as hand-edited: the migration is skipped and the user is told their file was
+    edited when it was not. Reword the template, snapshot the outgoing text into
+    templates/legacy/ in the same commit.
     """
     agents_path = wrapper / "AGENTS.md"
     claude_path = wrapper / "CLAUDE.md"
@@ -602,7 +634,7 @@ def migrate_claude_to_agents(
     expected = render_template("wrapper_AGENTS.md", subs)
 
     actual = claude_path.read_text()
-    if actual.rstrip() != expected.rstrip():
+    if actual.rstrip() not in _authored_wrapper_renders(subs):
         warn(
             f"CLAUDE.md looks hand-edited; add `@AGENTS.md` at the top yourself "
             f"or let it stand. Migration skipped for {claude_path}"

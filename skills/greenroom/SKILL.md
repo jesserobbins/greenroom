@@ -5,9 +5,9 @@ description: Sets up and maintains a greenroom layout — a public code repo bes
 
 # greenroom
 
-A per-project layout: one wrapper folder holding two sibling git repos. The
-public code is the stage; the private notes are the green room you prep in
-before going on.
+A per-project layout: one wrapper folder that holds two sibling git repos. The
+public code is the stage. The private notes are the green room, where you prep
+before you go on.
 
 ```
 ~/src/<project>/                  # wrapper — NOT a git repo
@@ -21,24 +21,26 @@ before going on.
 ```
 
 The wrapper has no `.git/`. It is an organizational container, so one `cd` puts
-every part of the project in front of you. Any number of extra repos (a
-`-public-fork`, another clone) can sit under it; they are auto-discovered.
+every part of the project in front of you. Any number of extra repos can sit
+under it, such as a `-public-fork` or another clone. greenroom finds them
+automatically.
 
 **Launch at the wrapper**: `cd <wrapper> && <your-agent>`. Every repo is then
-under cwd and reachable, each repo's `AGENTS.md` loads as the agent touches its
-files, and session history stays in one bucket.
+under cwd and reachable. Each repo's `AGENTS.md` loads as the agent touches its
+files. Session history stays in one bucket.
 
 ## Running greenroom
 
 The script ships beside this file, at `scripts/greenroom.py` under this skill's
-directory. Invoke it by its **absolute path** — where the script lives and what
-cwd you invoke it from are two different things, and several subcommands default
-a path argument to the current directory.
+directory. Run it by its **absolute path**. Where the script lives and which cwd
+you run it from are two different things: several subcommands default a path
+argument to the current directory.
 
-The skill's directory differs per install shape (plugin, `npx skills add`,
-manual clone), so resolve it. **Every shell invocation is a fresh process — `$greenroom`
-does not survive between them.** Paste this whole block into each call that runs
-the script, ending with the `cd` (if any) and the invocation, as one command:
+The skill's directory is different for each install shape (plugin,
+`npx skills add`, manual clone), so you must resolve it. **Every shell
+invocation is a fresh process. `$greenroom` does not survive between them.**
+Paste this whole block into each call that runs the script. End the same command
+with the `cd`, if the subcommand needs one, and then the invocation:
 
 ```bash
 # project-local install: walk up from $PWD, so it resolves from a subdirectory
@@ -78,8 +80,8 @@ done
 [ -n "$greenroom" ] || { echo "greenroom.py not found; see the fallback below" >&2; exit 1; }
 ```
 
-Copy that block verbatim, then append your own two lines to the same command —
-the `cd` (if the subcommand needs one) and the invocation:
+Copy that block verbatim. Then append your own two lines to the same command:
+the `cd`, if the subcommand needs one, and the invocation.
 
 ```
 cd <dir-the-subcommand-wants>
@@ -89,41 +91,45 @@ python3 "$greenroom" <subcommand> [args]
 Order matters: the resolver runs **before** any `cd`, because the project-local
 tier is relative to where you start.
 
-`npx skills add` without `-g` installs into the *project*, which is why the
-walked-up project tier comes first after the env var — counting only your own
-directory and real project roots above it, never an unrelated ancestor that
-happens to hold a `.claude/`. The plugin cache outranks
-`~/.claude/skills` because `$CLAUDE_PLUGIN_ROOT` is not exported into Bash-tool
-shells, so the cache *is* the plugin path — a leftover manual clone must not
-shadow it. That tier sorts on the version directory alone, so a second cached
-marketplace owner cannot outrank a newer version. The script runs through
-`python3` so a payload that lost its exec bit in transit still works.
+`npx skills add` without `-g` installs into the *project*. The walked-up project
+tier therefore comes first, after the env var. That tier counts only your own
+directory and the real project roots above it. It never counts an unrelated
+ancestor that happens to hold a `.claude/`.
 
-After a `new` or `retrofit` run, surface any plugin-config warning and any
-stale-cwd note **verbatim** — those are the only steps the user must act on by
-hand. `references/operations.md` has the rest.
+The plugin cache outranks `~/.claude/skills`. `$CLAUDE_PLUGIN_ROOT` is not
+exported into Bash-tool shells, so the cache *is* the plugin path, and a
+leftover manual clone must not shadow it. That tier sorts on the version
+directory alone, so a second cached marketplace owner cannot outrank a newer
+version. The script runs through `python3`, so a payload that lost its exec bit
+in transit still works.
+
+After a `new` or `retrofit` run, relay any plugin-config warning and any
+stale-cwd note **verbatim**. Those are the only steps the user must do by hand.
+`references/operations.md` has the rest.
 
 Every tier above is a Claude Code path. The skills CLI supports many other
-agents, and their install roots differ — **on a non-Claude agent expect the block
-to miss**, which is not a bug in your invocation. When it exits with
-`greenroom.py not found`, locate `scripts/greenroom.py` under the directory this
-file was read from and call that directly; it always ships beside this file.
+agents, and their install roots are different. **On a non-Claude agent, expect
+the block to miss.** That is not a fault in your invocation. If the block exits
+with `greenroom.py not found`, find `scripts/greenroom.py` under the directory
+this file was read from and call it directly. The script always ships beside
+this file.
 
-Pass the path argument explicitly, or run from the directory noted in the last
-column below. Pass `--help` (or `<subcommand> --help`) for the full flag list.
-The parser is the source of truth; do not re-document flags from prose.
+Pass the path argument explicitly, or run the command from the directory in the
+last column below. For the full flag list, pass `--help` or
+`<subcommand> --help`. The parser is the source of truth. Do not re-document the
+flags from prose.
 
 | Situation | Subcommand | Run from (if the path is omitted) |
 |---|---|---|
 | Existing public repo, want private notes beside it | `retrofit <path-to-repo>` | the repo to wrap |
 | New project, cloning an existing public repo | `new <name> --clone <url>` | the intended parent dir |
-| New project, public repo doesn't exist yet | `new <name> --init-public` | the intended parent dir |
+| New project, public repo does not exist yet | `new <name> --init-public` | the intended parent dir |
 | Added a fork or clone under an existing wrapper | `sync` | anywhere inside the wrapper |
 | Design docs already landed in the public repo | `collect` (see `references/collect.md`) | inside the public repo |
 
-Add `--with-private-fork` to `new`/`retrofit` for a third repo: a private dev
-checkout cloned from the local public repo, with its remote named `upstream` so
-`origin` stays free for a private GitHub remote.
+Add `--with-private-fork` to `new` or `retrofit` for a third repo. It is a
+private dev checkout, cloned from the local public repo. Its remote is named
+`upstream`, so `origin` stays free for a private GitHub remote.
 
 On Claude Code these are also `/greenroom:new`, `/greenroom:add`, and
 `/greenroom:sync`.
@@ -133,17 +139,17 @@ to run on native Windows.
 
 ## Leak hygiene
 
-These rules are why greenroom exists. They apply to every project using it.
+These rules are why greenroom exists. They apply to every project that uses it.
 
 - The private repo is **never published.** Nothing in it ships.
-- Reference public artifacts by GitHub URL (commit SHA, PR number), never by
-  local path. **The path itself is a small leak** — strip private-dir
-  references when pasting into a public PR, commit, or issue.
-- New design thinking, drafts, and review notes land in the private repo, not
-  the public one.
-- If a design doc matters enough to cite from a public PR, publish it (or a
-  redacted copy) into the public repo's `docs/` and link there.
-- Date-prefix working notes (`YYYY-MM-DD-topic.md`); leave design docs
+- Reference public artifacts by GitHub URL (commit SHA or PR number), never by
+  local path. **The path itself is a small leak.** Remove private-dir
+  references when you paste into a public PR, commit, or issue.
+- New design thinking, drafts, and review notes go in the private repo, not the
+  public one.
+- If a design doc matters enough to cite from a public PR, publish it into the
+  public repo's `docs/` and link there. A redacted copy is also acceptable.
+- Date-prefix working notes (`YYYY-MM-DD-topic.md`). Leave design docs
   unprefixed.
 
 ## Creating the private GitHub repo
@@ -154,9 +160,9 @@ until the user acts.
 When it prints a `To create private GitHub repos for these (optional):` block:
 
 - Relay the `gh repo create ... --private` commands **verbatim**.
-- Ask whether to run them. Run only on an explicit yes.
+- Ask whether to run them. Run them only on an explicit yes.
 - If the user names an org, substitute it for the `<owner>` prefix.
-- Make clear that declining leaves everything local.
+- Tell the user that a refusal leaves everything local.
 - These are always `--private`. Never offer or suggest a public variant.
 
 ## Further reference

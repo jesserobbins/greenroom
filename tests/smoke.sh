@@ -403,6 +403,101 @@ rm "$wm/AGENTS.md"
 [ "$(cat "$wm/CLAUDE.md")" = "@AGENTS.md" ] || fail "migration: CLAUDE.md not replaced with pointer (got: $(cat "$wm/CLAUDE.md"))"
 ok "migration: greenroom-authored CLAUDE.md migrates to AGENTS.md + pointer"
 
+# --- 11b. migration recognizes a SUPERSEDED template generation. Test 11 above
+#          copies the CURRENT AGENTS.md into CLAUDE.md, so it can only ever
+#          prove that today's template matches itself. The wrappers that
+#          actually need migrating were written by OLDER greenrooms, whose
+#          orientation text has since been reworded. Every such rewording used
+#          to silently turn "migrate it" into "warn: looks hand-edited", and no
+#          existing test could see it. The fixture below is the v1.0 wrapper
+#          text (0.1.0-alpha, commit 1fc24de), inlined rather than read from git
+#          history so the assertion survives a shallow clone or a tarball. ---
+mkdir -p "$T/migold"
+# --init-public so a real -public repo exists: canonical then resolves to
+# oldtest-public, which is what the frozen fixture below was rendered with.
+"$SCRIPT" new oldtest --init-public --parent "$T/migold" >/dev/null
+wo="$T/migold/oldtest"
+rm "$wo/AGENTS.md"
+cat > "$wo/CLAUDE.md" <<'LEGACY_V1'
+# AGENTS.md -- oldtest (wrapper)
+
+This is the **launch home** for the `oldtest` project: a plain directory (not a git repo) that holds the project's repos as subdirectories. Launching your agent here is the supported, canonical way to work on this project.
+
+## How to launch (any editor)
+
+From a terminal:
+
+```bash
+cd <this directory> && claude   # or: codex, gemini, ...
+```
+
+That is the whole rule. Because this directory is the launch cwd, every child repo below is readable and writable with no extra wiring, session history stays in **one** bucket, and each child repo's own `AGENTS.md` loads automatically the first time you touch its files. VS Code users can instead run the `Claude Code (oldtest-public)` task or open the `*.code-workspace` here. The repo map lives in `README.md` in this directory.
+
+## Where to work
+
+- `oldtest-public/` -- the public code (the published repo). The "stage."
+- `*-private/` -- private notes, never published. The "green room."
+- Other sibling repos (forks, docs) -- see the README map.
+
+## Leak hygiene (must-know before you touch any repo)
+
+- The `*-private` repo and this wrapper are **never published.** Nothing from them ships.
+- Reference public artifacts by GitHub URL (commit SHA / PR number), never by local path. When pasting from private notes into a public PR/commit, strip path references. The path itself is a small leak.
+- New design thinking, drafts, and review notes land in `*-private/`, not in the public repo.
+LEGACY_V1
+"$SCRIPT" sync --wrapper "$wo" >/dev/null 2>&1 || true
+[ -f "$wo/AGENTS.md" ] || fail "migration: a superseded-generation CLAUDE.md was not migrated to AGENTS.md"
+[ "$(cat "$wo/CLAUDE.md")" = "@AGENTS.md" ] \
+  || fail "migration: superseded-generation CLAUDE.md not replaced with pointer (got: $(cat "$wo/CLAUDE.md"))"
+ok "migration: a CLAUDE.md from a superseded template generation still migrates"
+
+# --- 11c. drift guard: EVERY historical wrapper_AGENTS.md is still reachable.
+#          11b only proves generation 001 migrates. The recurring failure is a
+#          future reword that ships without snapshotting the outgoing text --
+#          which silently strands every wrapper created by the release being
+#          superseded, and no other test would notice. Walk the file's own git
+#          history and require each distinct version to be either the current
+#          template or a file in templates/legacy/. Skipped (not failed) when
+#          history is unavailable, so a shallow clone or tarball still runs. ---
+# REPO_ROOT is not set until much later in this file; derive it here rather than
+# reorder the script around one test.
+drift_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+legacy_dir="$drift_root/skills/greenroom/templates/legacy"
+cur_tpl="$drift_root/skills/greenroom/templates/wrapper_AGENTS.md"
+if ! git -C "$drift_root" rev-parse --git-dir >/dev/null 2>&1 \
+   || [ -f "$(git -C "$drift_root" rev-parse --git-dir)/shallow" ]; then
+  ok "drift guard skipped (no full git history available)"
+else
+  unsnapshotted=""
+  # Two sources, unioned. `--follow` reads through renames but is heuristic, and
+  # this repo has already moved the skill dir twice -- if it ever loses the
+  # trail, the walk would quietly cover fewer commits and PASS. The `--all` glob
+  # does not model renames at all, so it still finds the file at any past path.
+  # Neither alone fails closed on a future move; together they do.
+  for sha in $( { git -C "$drift_root" log --format=%H --follow \
+                    -- skills/greenroom/templates/wrapper_AGENTS.md
+                  git -C "$drift_root" log --all --format=%H \
+                    -- '*wrapper_AGENTS.md'; } | sort -u); do
+    blob="$T/blob-$sha.md"
+    git -C "$drift_root" show "$sha:skills/greenroom/templates/wrapper_AGENTS.md" \
+      > "$blob" 2>/dev/null \
+      || git -C "$drift_root" show "$sha:templates/wrapper_AGENTS.md" \
+        > "$blob" 2>/dev/null \
+      || continue
+    [ -s "$blob" ] || continue
+    if cmp -s "$blob" "$cur_tpl"; then continue; fi
+    found=""
+    for snap in "$legacy_dir"/wrapper_AGENTS.*.md; do
+      [ -e "$snap" ] || continue
+      if cmp -s "$blob" "$snap"; then found=1; break; fi
+    done
+    [ -n "$found" ] || unsnapshotted="$unsnapshotted $sha"
+  done
+  [ -z "$unsnapshotted" ] || fail \
+    "wrapper_AGENTS.md versions from these commits are in no legacy/ snapshot, so wrappers from those releases can no longer migrate:$unsnapshotted"
+  ok "drift guard: every historical wrapper_AGENTS.md is current or snapshotted"
+fi
+
 # --- 12. migration: hand-edited CLAUDE.md is left untouched ---
 mkdir -p "$T/mig2"
 "$SCRIPT" new handtest --parent "$T/mig2" >/dev/null
@@ -838,6 +933,16 @@ chmod -x "$iso/greenroom/scripts/greenroom.py"
 [ -d "$T/isoparent/isoproj/isoproj-private/docs" ] || fail "isolated payload did not create the private buckets"
 [ -f "$T/isoparent/isoproj/isoproj-private/AGENTS.md" ] || fail "isolated payload could not render its templates"
 [ -f "$T/isoparent/isoproj/.greenroom" ] || fail "isolated payload did not write the .greenroom marker"
+# The superseded-template snapshots are payload, not repo housekeeping: without
+# them a shipped greenroom silently stops migrating pre-AGENTS.md wrappers and
+# calls their CLAUDE.md hand-edited instead. A scaffold still succeeds without
+# them, so only an explicit presence check catches a packaging rule that drops
+# the directory.
+for snap in "$REPO_ROOT"/skills/greenroom/templates/legacy/wrapper_AGENTS.*.md; do
+  [ -e "$snap" ] || fail "no superseded-template snapshots are tracked; migration coverage has been lost"
+  [ -f "$iso/greenroom/templates/legacy/$(basename "$snap")" ] \
+    || fail "the payload is missing superseded template $(basename "$snap"); shipped greenroom cannot migrate wrappers from that release"
+done
 # SKILL.md routes to `sync` and `collect` too, and to references/*.md. A typo in a
 # router link is a dead pointer -- the same "documented but not shipped" bug class. ---
 for ref in $(grep -o 'references/[A-Za-z0-9_-]*\.md' "$iso/greenroom/SKILL.md" | sort -u); do
