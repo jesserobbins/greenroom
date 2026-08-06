@@ -1610,6 +1610,9 @@ def cmd_collect(args: argparse.Namespace) -> None:
         return
 
     # Apply: extract file content at the chosen sha and write to target.
+    # This is an intentional, copy-only trust boundary: collect reads bytes
+    # from the user's local clone after the user reviewed the dry-run plan. It
+    # never executes or interprets the content; --apply is the explicit opt-in.
     # Read blobs as bytes (binary-safe) so non-UTF-8 files are preserved intact.
     copied = 0
     skipped = 0

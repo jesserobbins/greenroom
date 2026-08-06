@@ -21,9 +21,11 @@ Read the plan. Then repeat all three parts with
 `<project>-private/`.
 
 **Copy-only.** The script reads each file from git at the chosen commit SHA. It
-writes the file into `<project>-private/<bucket>/`. It never rewrites public
-history. To remove the originals from public history you need `git filter-repo`,
-which is out of scope for greenroom on purpose.
+writes the bytes into `<project>-private/<bucket>/`; it never executes or
+interprets the content, and it never rewrites public history. `--apply` is the
+explicit opt-in after reviewing the dry-run plan. To remove the originals from
+public history you need `git filter-repo`, which is out of scope for greenroom
+on purpose.
 
 ## Sources scanned
 
