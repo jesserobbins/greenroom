@@ -111,6 +111,62 @@ def choose_canonical(repos: list[str], known_public: Optional[str] = None) -> Op
     return repos[0]
 
 
+def _strip_trailing_commas(text: str) -> str:
+    """Remove trailing commas before `}` or `]`, ignoring commas inside strings.
+
+    VS Code writes and freely accepts trailing commas in `.code-workspace`
+    files (JSONC), so any workspace a user has opened and saved comes back
+    with them. Stdlib `json.loads` rejects trailing commas outright, so
+    without this, sync's "leave malformed files untouched" fallback would
+    trigger on every VS Code-touched workspace and new repos would silently
+    stop being added as folder roots.
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+    in_string = False
+    escape = False
+    while i < n:
+        c = text[i]
+        if in_string:
+            out.append(c)
+            if escape:
+                escape = False
+            elif c == "\\":
+                escape = True
+            elif c == '"':
+                in_string = False
+            i += 1
+            continue
+        if c == '"':
+            in_string = True
+            out.append(c)
+            i += 1
+            continue
+        if c == ",":
+            j = i + 1
+            while j < n and text[j] in " \t\r\n":
+                j += 1
+            if j < n and text[j] in "}]":
+                i += 1
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def _load_jsonc(text: str) -> object:
+    """Parse JSON, tolerating VS Code-style trailing commas on retry.
+
+    Raises json.JSONDecodeError (from the original, untouched-text attempt)
+    if the text still doesn't parse after stripping trailing commas — e.g. it
+    has actual `//`/`/* */` comments, which callers still refuse to touch.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return json.loads(_strip_trailing_commas(text))
+
+
 def _hsl_to_hex(h: float, s: float, l: float) -> str:
     """HSL (h in [0,360), s/l in [0,1]) → #rrggbb."""
     c = (1 - abs(2 * l - 1)) * s
@@ -253,8 +309,9 @@ def write_code_workspace(
     Idempotent and additive: if the file already exists, only *add* missing
     folder roots and missing settings keys — never overwrite an existing folder,
     setting, task, or hand-added customization. (A `.code-workspace` is JSONC;
-    if it has comments, stdlib JSON can't parse it, so the file is left untouched
-    and a warning is printed.)
+    trailing commas — what VS Code itself writes — are tolerated, but if the
+    file has actual `//`/`/* */` comments, stdlib JSON still can't parse it, so
+    the file is left untouched and a warning is printed.)
     """
     workspace_path = wrapper / f"{project_name}.code-workspace"
     desired_folders = [{"name": r, "path": r} for r in _ordered_folders(repos, canonical)]
@@ -271,7 +328,7 @@ def write_code_workspace(
 
     if workspace_path.exists():
         try:
-            existing = json.loads(workspace_path.read_text())
+            existing = _load_jsonc(workspace_path.read_text())
         except (json.JSONDecodeError, OSError) as e:
             warn(f"could not parse {workspace_path} ({e}); leaving it untouched")
             return workspace_path
@@ -747,7 +804,7 @@ def _has_greenroom_workspace(d: Path) -> bool:
             # Read UTF-8 explicitly to match the write side (write_code_workspace
             # uses ensure_ascii=False), so a greenroom-authored workspace with
             # non-ASCII paths still qualifies on a non-UTF-8-locale machine.
-            data = json.loads(ws.read_text(encoding="utf-8"))
+            data = _load_jsonc(ws.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
         gr = data.get("greenroom") if isinstance(data, dict) else None
