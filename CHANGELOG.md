@@ -5,6 +5,17 @@ All notable changes to greenroom are recorded here. The format follows
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it
 reaches a stable release.
 
+## [0.2.3-alpha] - 2026-08-17
+
+### Documented
+- The README is rewritten in Simplified Technical English. Metaphor verbs
+  ("wires", "rides", "anchors", "comes along") became literal verbs ("lets",
+  "uses", "opens at", "stays intact"). Long sentences split under the 20- and
+  25-word limits. Conditions moved before their commands. The intro theatre
+  metaphor and tagline stay — STE deletes persuasion by design, so the brand
+  voice is preserved. Code blocks, CLI flags, and file paths are untouched.
+- Added the `assets/greenroom-preview.png` the README already renders.
+
 ## [0.2.2-alpha] - 2026-08-06
 
 ### Fixed
@@ -298,6 +309,7 @@ behavior may still change.
 [#2]: https://github.com/jesserobbins/greenroom/issues/2
 [#3]: https://github.com/jesserobbins/greenroom/issues/3
 [#4]: https://github.com/jesserobbins/greenroom/issues/4
+[0.2.3-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.2.3-alpha
 [0.2.2-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.2.2-alpha
 [0.2.1-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/jesserobbins/greenroom/releases/tag/v0.2.0-alpha
